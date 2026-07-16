@@ -100,8 +100,16 @@ def train_and_eval(model_name, model, train_loader, val_loader, device, epochs=3
     return total_mse / batches, total_pcc / batches
 
 def main():
+    import torch
     torch.set_num_threads(7)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    import os
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
     print(f"Running benchmarks on {device}...")
     
     # We use mock data for the rapid benchmarking loop because 
