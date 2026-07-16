@@ -1,3 +1,5 @@
+import os
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -5,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy.stats import pearsonr
-import os
 
 from eczema_flow.data import get_dataloaders
 from eczema_flow.model import EczemaFlowModel
@@ -102,8 +103,6 @@ def train_and_eval(model_name, model, train_loader, val_loader, device, epochs=3
 def main():
     import torch
     torch.set_num_threads(7)
-    import os
-    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
     if torch.cuda.is_available():
         device = torch.device('cuda')
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
@@ -137,40 +136,42 @@ def main():
     results['EczemaFlow (Full)'] = train_and_eval("EczemaFlow (Full)", full_flow, train_loader, val_loader, device)
     
     print("\\n--- Benchmark Results ---")
+    print("\n--- Benchmark Results ---")
     for name, (mse, pcc) in results.items():
         print(f"{name:20s} | MSE: {mse:.4f} | PCC: {pcc:.4f}")
         
     # Generate Chart
     os.makedirs('paper/figures', exist_ok=True)
     labels = list(results.keys())
-    mses = [r[0] for r in results.values()]
-    pccs = [r[1] for r in results.values()]
+    mses = [res[0] for res in results.values()]
+    pccs = [res[1] for res in results.values()]
     
     x = np.arange(len(labels))
-    width = 0.35
+    width = 0.5
     
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
-    # Plot MSE on primary y-axis
-    rects1 = ax1.bar(x - width/2, mses, width, label='MSE (Lower is better)', color='tab:red')
-    ax1.set_ylabel('Mean Squared Error', color='tab:red')
-    ax1.tick_params(axis='y', labelcolor='tab:red')
+    # Left Subplot: MSE
+    ax1.bar(x, mses, width, color='tab:red')
+    ax1.set_ylabel('Mean Squared Error (Lower is better)')
+    ax1.set_title('MSE Performance')
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels, rotation=15, ha='right')
+    ax1.set_ylim(bottom=0)
     
-    # Plot PCC on secondary y-axis
-    ax2 = ax1.twinx()
-    rects2 = ax2.bar(x + width/2, pccs, width, label='PCC (Higher is better)', color='tab:blue')
-    ax2.set_ylabel('Pearson Correlation Coefficient', color='tab:blue')
-    ax2.tick_params(axis='y', labelcolor='tab:blue')
+    # Right Subplot: PCC
+    ax2.bar(x, pccs, width, color='tab:blue')
+    ax2.set_ylabel('Pearson Correlation (Higher is better)')
+    ax2.set_title('PCC Performance')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(labels, rotation=15, ha='right')
+    # Center PCC y-axis around 0 if there are negative values
+    y_max = max(abs(min(pccs)), abs(max(pccs))) * 1.2
+    ax2.set_ylim(-y_max, y_max)
+    ax2.axhline(0, color='black', linewidth=0.8, linestyle='--')
     
+    fig.suptitle('Performance Benchmarks of WSI-to-ST Inference Models', fontsize=16)
     fig.tight_layout()
-    plt.title('Performance Benchmarks of WSI-to-ST Inference Models')
-    
-    # Combined legend
-    lines, labels = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines + lines2, labels + labels2, loc='upper left')
     
     plt.savefig('paper/figures/benchmark_chart.pdf', bbox_inches='tight', dpi=300)
     print("Saved benchmark chart to paper/figures/benchmark_chart.pdf")
