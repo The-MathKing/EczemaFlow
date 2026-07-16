@@ -54,7 +54,7 @@ Generative AI models, particularly diffusion models, handle this stochasticity f
 \section*{Methods / Materials}
 
 \subsection*{Data Acquisition \& Preprocessing}
-We utilized publicly available 10x Genomics Visium spatial transcriptomics datasets (e.g., V1 Breast Cancer Block A) sourced via the \texttt{scanpy} library to establish real-world baselines. Data was preprocessed by calculating standard quality control metrics, uniquely identifying variable names, and mapping UMI counts to spatial coordinates. 
+We utilized the publicly available 10x Genomics Visium spatial transcriptomics dataset \textbf{GSE206391}, sourced from the NCBI Gene Expression Omnibus (GEO). This highly curated clinical dataset provides precise spatial mapping of both lesional and non-lesional Atopic Dermatitis human skin samples. The raw \texttt{SpaceRanger} outputs were processed via a custom extraction pipeline into standard \texttt{AnnData} format using the \texttt{scanpy} library. Data was preprocessed by calculating standard quality control metrics, filtering dead tissue spots, uniquely identifying variable names, and mapping UMI counts to spatial morphological coordinates. 
 
 \subsection*{Algorithm/Model Architecture}
 \subsubsection*{Zero-Inflated Negative Binomial (ZINB) Prior}
