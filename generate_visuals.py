@@ -23,7 +23,21 @@ def generate_visuals(data_path, output_dir):
     plt.savefig(os.path.join(output_dir, 'spatial_n_genes.pdf'), bbox_inches='tight', dpi=300)
     plt.close()
     
-    # 3. Simple H&E image without spots (just the tissue)
+    # 3. Biological Validation: Mapping Specific Marker Genes
+    print("Generating Biological Marker Gene Maps...")
+    # Using Visium Breast Cancer dataset as a surrogate for spatial pipeline mapping
+    # We will map standard structural/immune markers as proof of concept.
+    markers = []
+    for gene in ['COL18A1', 'CCL19', 'KRT14', 'ERBB2', 'CD3D']:
+        if gene in adata.var_names:
+            markers.append(gene)
+            
+    if markers:
+        sc.pl.spatial(adata, color=markers, show=False)
+        plt.savefig(os.path.join(output_dir, 'spatial_markers.pdf'), bbox_inches='tight', dpi=300)
+        plt.close()
+    
+    # 4. Simple H&E image without spots (just the tissue)
     print("Generating H&E reference image...")
     sc.pl.spatial(adata, color=None, alpha=0.0, show=False)
     plt.savefig(os.path.join(output_dir, 'he_reference.pdf'), bbox_inches='tight', dpi=300)
