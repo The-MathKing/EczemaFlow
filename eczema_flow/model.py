@@ -7,7 +7,7 @@ from .prior import ZINBPrior
 class EczemaFlowModel(nn.Module):
     """
     Complete EczemaFlow framework combining:
-    - Many-Body Attention Conditioning
+    - ViT Contextual Encoder Conditioning
     - MoE Vector Field
     - ZINB Prior integration
     """

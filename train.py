@@ -4,32 +4,40 @@ from eczema_flow.data import get_dataloaders
 from eczema_flow.model import EczemaFlowModel
 from tqdm import tqdm
 import time
+import os
 
 def main():
     print("Initializing EczemaFlow Framework...")
-    torch.set_num_threads(7)
+    # Set to optimal thread count for HPC
+    torch.set_num_threads(8)
     
-    # Hyperparameters
-    batch_size = 4
-    num_samples = 16 # Tiny dataset for dry run
-    num_genes = 100
+    # Robust Hyperparameters for Full Scale Training
+    batch_size = 64
+    num_genes = 500
     cond_dim = 128
-    num_experts = 3
-    epochs = 2
+    num_experts = 4
+    epochs = 500
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
-    # Data
-    print("Loading mock dataset...")
-    train_loader, val_loader = get_dataloaders(
-        batch_size=batch_size, 
-        num_samples=num_samples, 
-        num_genes=num_genes
-    )
+    # Data - load full dataset without dry-run cap
+    print("Loading multi-slide dataset...")
+    try:
+        train_loader, val_loader = get_dataloaders(
+            batch_size=batch_size, 
+            num_samples=None, # Load all samples
+            num_genes=num_genes
+        )
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        print("Please run 'python process_geo_ad.py' first to compile the dataset.")
+        return
+        
+    print(f"Loaded {len(train_loader.dataset)} training spots and {len(val_loader.dataset)} validation spots.")
     
     # Model
-    print("Building model...")
+    print("Building EczemaFlow model...")
     model = EczemaFlowModel(
         num_genes=num_genes, 
         cond_dim=cond_dim, 
@@ -37,42 +45,55 @@ def main():
         device=device
     ).to(device)
     
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    # Using AdamW as specified in the paper
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-5)
     
-    print("Starting training loop (dry run)...")
-    model.train()
+    # Create checkpoints dir
+    os.makedirs("checkpoints", exist_ok=True)
+    
+    print("Starting full training loop...")
+    best_val_loss = float('inf')
+    
     for epoch in range(epochs):
-        total_loss = 0
+        model.train()
+        total_train_loss = 0
         start_time = time.time()
+        
+        # Training
         for batch_idx, (patches, counts, coords) in enumerate(train_loader):
             patches = patches.to(device)
             counts = counts.to(device)
             
             optimizer.zero_grad()
-            
-            # Forward pass & Flow Matching Loss
             loss = model.compute_loss(patches, counts)
-            
             loss.backward()
             optimizer.step()
             
-            total_loss += loss.item()
+            total_train_loss += loss.item()
             
-        avg_loss = total_loss / len(train_loader)
-        print(f"Epoch [{epoch+1}/{epochs}] - Loss: {avg_loss:.4f} - Time: {time.time() - start_time:.2f}s")
+        avg_train_loss = total_train_loss / len(train_loader)
         
-    print("Testing ODE sampling...")
-    model.eval()
-    with torch.no_grad():
-        sample_patches, _, _ = next(iter(val_loader))
-        sample_patches = sample_patches.to(device)
+        # Validation
+        model.eval()
+        total_val_loss = 0
+        with torch.no_grad():
+            for patches, counts, coords in val_loader:
+                patches = patches.to(device)
+                counts = counts.to(device)
+                val_loss = model.compute_loss(patches, counts)
+                total_val_loss += val_loss.item()
+                
+        avg_val_loss = total_val_loss / max(len(val_loader), 1)
         
-        try:
-            # Sample using 10 Euler steps
-            generated_st = model.sample(sample_patches, num_steps=10)
-            print(f"Successfully generated ST expression of shape: {generated_st.shape}")
-        except ImportError:
-            print("Skipping ODE sampling test because torchdiffeq is not installed.")
+        print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {avg_train_loss:.4f} - Val Loss: {avg_val_loss:.4f} - Time: {time.time() - start_time:.2f}s")
+        
+        # Save best model
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            torch.save(model.state_dict(), "checkpoints/best_model.pth")
+            print("  -> Checkpoint saved!")
+
+    print("Training complete.")
 
 if __name__ == "__main__":
     main()

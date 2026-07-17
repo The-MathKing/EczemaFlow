@@ -23,7 +23,7 @@ class CNNRegressor(nn.Module):
         patches_flat = patches.view(b * n, c, h, w)
         features = self.encoder(patches_flat) # (b*n, cond_dim)
         
-        # Aggregate features across the n patches (mean pooling instead of Many-Body Attention)
+        # Aggregate features across the n patches (mean pooling instead of ViT Contextual Encoder)
         features = features.view(b, n, -1).mean(dim=1)
         
         # Regress

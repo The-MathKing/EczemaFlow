@@ -1,5 +1,4 @@
 import os
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -13,11 +12,11 @@ from eczema_flow.model import EczemaFlowModel
 from eczema_flow.model_baselines import CNNRegressor, GaussianPrior
 from eczema_flow.attention import MorphologyEncoder
 
-# Ablation 1: No Attention (Simple Mean Pooling)
+# Ablation 1: No Context (Simple Mean Pooling)
 class EczemaFlowNoAttention(EczemaFlowModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Replace Many-Body Attention with a simple Morphology Encoder
+        # Replace ViT Contextual Encoder with a simple Morphology Encoder
         # that mean pools the features.
         class MeanPoolConditioner(torch.nn.Module):
             def __init__(self, embed_dim):
@@ -53,9 +52,9 @@ def calculate_metrics(preds, targets):
             pcc_list.append(r)
     return mse, np.mean(pcc_list) if pcc_list else 0.0
 
-def train_and_eval(model_name, model, train_loader, val_loader, device, epochs=3, is_cnn=False):
-    print(f"\\n--- Training {model_name} ---")
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+def train_and_eval(model_name, model, train_loader, val_loader, device, epochs=10, is_cnn=False):
+    print(f"\n--- Training {model_name} ---")
+    optimizer = optim.Adam(model.parameters(), lr=1e-3) # Increase learning rate for faster convergence on mock data
     model.train()
     
     for epoch in range(epochs):
@@ -94,19 +93,16 @@ def train_and_eval(model_name, model, train_loader, val_loader, device, epochs=3
             total_mse += mse
             total_pcc += pcc
             batches += 1
-            
-            if batches >= 2: # Eval on subset for speed in proof of concept
-                break
                 
     return total_mse / batches, total_pcc / batches
 
 def main():
     import torch
-    torch.set_num_threads(7)
+    import os
+    # We cap threads to 4 to balance performance and avoid lock contention on Apple Silicon
+    torch.set_num_threads(4)
     if torch.cuda.is_available():
         device = torch.device('cuda')
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device('mps')
     else:
         device = torch.device('cpu')
     print(f"Running benchmarks on {device}...")
@@ -127,9 +123,9 @@ def main():
     gaussian_flow = GaussianFlowModel(num_genes=num_genes, num_experts=2, device=device).to(device)
     results['Gaussian Flow'] = train_and_eval("Gaussian Flow", gaussian_flow, train_loader, val_loader, device)
     
-    # 3. EczemaFlow (No Attention)
+    # 3. EczemaFlow (No Context)
     no_attn_flow = EczemaFlowNoAttention(num_genes=num_genes, num_experts=2, device=device).to(device)
-    results['No Attention Flow'] = train_and_eval("No Attention Flow", no_attn_flow, train_loader, val_loader, device)
+    results['No Context Flow'] = train_and_eval("No Context Flow", no_attn_flow, train_loader, val_loader, device)
     
     # 4. Full EczemaFlow
     full_flow = EczemaFlowModel(num_genes=num_genes, num_experts=2, device=device).to(device)

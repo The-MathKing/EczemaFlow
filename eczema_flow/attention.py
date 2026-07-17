@@ -25,7 +25,7 @@ class MorphologyEncoder(nn.Module):
         features = self.projection(features) # (B*N, embed_dim)
         return features
 
-class ManyBodyAttention(nn.Module):
+class ViTContextualEncoder(nn.Module):
     """
     Evaluates sets of morphological features simultaneously using self-attention
     to generate a high-order contextual embedding representing the multi-cell microenvironment.
@@ -62,7 +62,7 @@ class ManyBodyAttention(nn.Module):
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1) # (B, N+1, embed_dim)
         
-        # Apply many-body attention
+        # Apply ViT self-attention
         out = self.transformer(x) # (B, N+1, embed_dim)
         
         # Extract the contextual embedding from the CLS token position
@@ -71,12 +71,12 @@ class ManyBodyAttention(nn.Module):
 
 class ConditioningNetwork(nn.Module):
     """
-    Combines the Morphology Encoder and Many-Body Attention module.
+    Combines the Morphology Encoder and ViT Contextual Encoder module.
     """
     def __init__(self, embed_dim=256):
         super().__init__()
         self.encoder = MorphologyEncoder(embed_dim=embed_dim)
-        self.attention = ManyBodyAttention(embed_dim=embed_dim)
+        self.attention = ViTContextualEncoder(embed_dim=embed_dim)
         
     def forward(self, patches):
         """
@@ -89,6 +89,6 @@ class ConditioningNetwork(nn.Module):
         # Extract features
         patch_features = self.encoder(patches_flat)
         
-        # Apply Many-Body Attention
+        # Apply ViT Contextual Encoder
         contextual_embeds = self.attention(patch_features, num_patches_per_spot=n)
         return contextual_embeds
