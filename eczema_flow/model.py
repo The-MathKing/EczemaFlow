@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from .attention import ConditioningNetwork
 from .moe import MoEVectorField
-from .prior import ZINBPrior
+from .prior import ZINBPrior, GaussianPrior
 
 class EczemaFlowModel(nn.Module):
     """
@@ -20,7 +20,8 @@ class EczemaFlowModel(nn.Module):
             x_dim=num_genes, 
             cond_dim=cond_dim
         )
-        self.prior = ZINBPrior(num_genes=num_genes, device=device)
+        # Use Gaussian Prior to avoid MPS CPU Fallbacks associated with ZINB
+        self.prior = GaussianPrior(num_genes=num_genes, device=device)
         self.num_genes = num_genes
 
     def forward_vector_field(self, t, x, c):

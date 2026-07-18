@@ -12,9 +12,9 @@ class VisiumDataset(Dataset):
     Loads actual .h5ad data processed by process_geo_ad.py and extracts 
     real H&E patches from the associated image arrays.
     """
-    def __init__(self, data_path="./data/GSE206391_AD_MultiSlide.h5ad", transform=None, num_genes=500):
+    def __init__(self, data_path="/Volumes/2TB/GSE206391_Preprocessed_data.h5", transform=None, num_genes=500):
         if not os.path.exists(data_path):
-            raise FileNotFoundError(f"CRITICAL ERROR: Dataset {data_path} not found. You must run process_geo_ad.py first.")
+            raise FileNotFoundError(f"CRITICAL ERROR: Dataset {data_path} not found.")
             
         print(f"Loading true clinical dataset: {data_path}")
         self.adata = sc.read_h5ad(data_path)

@@ -14,6 +14,11 @@ class MorphologyEncoder(nn.Module):
         
         # Remove the final classification layer
         self.backbone = nn.Sequential(*list(resnet.children())[:-1])
+        
+        # Freeze the backbone to save compute time and memory
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+            
         self.projection = nn.Linear(2048, embed_dim)
 
     def forward(self, patches):

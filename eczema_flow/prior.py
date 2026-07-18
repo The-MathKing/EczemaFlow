@@ -79,3 +79,22 @@ class ZINBPrior(nn.Module):
         # In practice, compute mean, variance, and dropout rate per gene
         # and set self.log_r, self.logit_p, self.logit_pi accordingly using moment matching.
         pass
+
+class GaussianPrior(nn.Module):
+    r"""
+    Standard Gaussian Prior for Flow Matching.
+    This bypasses all MPS CPU fallbacks associated with Poisson/Gamma sampling,
+    enabling full hardware acceleration on Apple Silicon GPUs.
+    """
+    def __init__(self, num_genes, device='cpu'):
+        super().__init__()
+        self.num_genes = num_genes
+        self.device = device
+        
+    def sample(self, batch_size):
+        """
+        Sample from N(0, I). Native MPS support.
+        """
+        # We sample N(0, I) and optionally scale it slightly to match expected input space
+        samples = torch.randn(batch_size, self.num_genes, device=self.device)
+        return samples

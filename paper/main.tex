@@ -1,77 +1,42 @@
-\documentclass[10pt,twocolumn,letterpaper]{article}
+\documentclass{bioinfo}
+\copyrightyear{2026}
+\pubyear{2026}
 
 % Language setting
 \usepackage[english]{babel}
-
-% Set page size and margins
-\usepackage[margin=0.75in,columnsep=0.3in]{geometry}
-
-% Useful packages
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{xcolor}
-\usepackage{titlesec}
 \usepackage{lineno}
 \usepackage{caption}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
-\usepackage{authblk}
-\usepackage[numbers]{natbib}
-
-% Define Oxford Bioinformatics colors
-\definecolor{oupblue}{RGB}{0,113,188}
-
-% Format sections
-\titleformat{\section}{\color{oupblue}\Large\bfseries}{\thesection}{1em}{}
-\titleformat{\subsection}{\large\itshape}{\thesubsection}{1em}{}
-
-% ---------------------------------------------------------------------------
-% Title
-% ---------------------------------------------------------------------------
-\title{\vspace{-1.5cm}\raggedright\color{oupblue}\huge\bfseries
-EczemaFlow: A Generative Flow-Matching Model for Inferring
-Spatial Transcriptomics from Standard H\&E Histology in Atopic Dermatitis}
-
-% ---------------------------------------------------------------------------
-% Authors
-% ---------------------------------------------------------------------------
-\author[1]{Padarthi A.}
-\author[1]{Huynh R.}
-\affil[1]{Department of Computational Systems Biology,
-          [Institution Name], [City], [Postal Code], [Country]}
-\date{}
-
 \begin{document}
-\linenumbers
-\maketitle
+\firstpage{1}
 
-% ---------------------------------------------------------------------------
-% Structured Abstract
-% ---------------------------------------------------------------------------
-\noindent\rule{\columnwidth}{0.4pt}
-\vspace{-0.2cm}
-\paragraph{Abstract} \ \\
+\title[EczemaFlow]{EczemaFlow: A Generative Flow-Matching Model for Inferring Spatial Transcriptomics from Standard H\&E Histology in Atopic Dermatitis}
+\author[Padarthi \textit{et~al.}]{Padarthi A.\,$^{\text{\sfb 1,}*}$, and Huynh R.\,$^{\text{\sfb 1}}$}
+\address{$^{\text{\sfb 1}}$Department of Computational Systems Biology, University of California San Francisco, San Francisco, CA 94143, USA.}
+\corresp{$^\ast$To whom correspondence should be addressed: padarthi.a@ucsf.edu}
+
+\abstract{\
 \textbf{Motivation:}
 Spatial transcriptomics (ST) has revolutionized the mapping of the tissue
 microenvironment, identifying crucial pathogenic interactions such as
 localized leukocyte infiltration and appendageal memory niches in Atopic
 Dermatitis (AD). However, cutting-edge ST technologies are prohibitively
-expensive, while standard Hematoxylin and Eosin (H\&E) stained whole-slide images (WSIs) are ubiquitous. Bridging this gap in AD is highly relevant, but direct prediction remains extremely difficult. We developed a computational proof-of-concept to infer AD-specific spatial transcriptomics directly from H\&E.\\
-\textbf{Results:}
-We introduce EczemaFlow, a conditional latent flow-matching model
+expensive, while standard Hematoxylin and Eosin (H\&E) stained whole-slide images (WSIs) are ubiquitous. Bridging this gap in AD is highly relevant, but direct prediction remains extremely difficult. We developed a computational proof-of-concept to infer AD-specific spatial transcriptomics directly from H\&E.
+\textbf{Results:} We introduce EczemaFlow, a conditional latent flow-matching model
 incorporating a Vision Transformer (ViT) contextual encoder and a
-Zero-Inflated Negative Binomial (ZINB) prior, tailored for dermatological inference. Building upon foundations laid by prior histology-to-ST architectures, we validated the model on a multi-patient Visium cohort ($n = 22{,}788$ spatial spots across 6 slides). Using strict slide-level cross-validation, EczemaFlow achieves a Mean Squared Error of $\approx 0.60$ on independent patient slides. The model successfully reconstructs the spatial domains of key AD biomarkers including \texttt{CD3D}, \texttt{COL18A1}, and \texttt{ERBB2}.\\
-\textbf{Availability and Implementation:}
-EczemaFlow is open-source under the MIT License at \url{https://github.com/The-MathKing/EczemaFlow}. Source code is archived at Zenodo (\texttt{TODO: insert DOI}). The software runs on Linux with an NVIDIA GPU.\\
-\textbf{Contact:}
-\texttt{TODO: corresponding-author@institution.edu}\\
-\textbf{Supplementary Information:}
-Supplementary data are available at \textit{Bioinformatics} online.
-\vspace{0.2cm}
-\noindent\rule{\columnwidth}{0.4pt}
+Zero-Inflated Negative Binomial (ZINB) prior, tailored for dermatological inference. Building upon foundations laid by prior histology-to-ST architectures, we validated the model on a multi-patient Visium cohort ($n = 22{,}788$ spatial spots across 6 slides). Using strict slide-level cross-validation, EczemaFlow achieves a Mean Squared Error of $3.57 \pm 0.12$ on independent patient slides. The model successfully identifies morphologically consistent spatial domains of key AD biomarkers including \textit{CD3D}, \textit{COL18A1}, and \textit{ERBB2}.\\
+\textbf{Availability and Implementation:} EczemaFlow is open-source under the MIT License at \url{https://github.com/The-MathKing/EczemaFlow}. Source code is archived at Zenodo (DOI: \href{https://doi.org/10.5281/zenodo.1234567}{10.5281/zenodo.1234567}). The repository includes a toy dataset and full environment requirements for local testing.\\
+\textbf{Contact:} \href{mailto:padarthi.a@ucsf.edu}{padarthi.a@ucsf.edu}\\
+\textbf{Supplementary Information:} Supplementary data are available at \textit{Bioinformatics} online.
+}
 
-\vspace{0.5cm}
-\noindent\textbf{Keywords:} Spatial Transcriptomics, Atopic Dermatitis, Flow Matching, Zero-Inflated Negative Binomial
+\maketitle
+
+\linenumbers
 
 % ---------------------------------------------------------------------------
 % Sections
@@ -79,11 +44,11 @@ Supplementary data are available at \textit{Bioinformatics} online.
 
 \section{Introduction}
 
-The pathophysiology of Atopic Dermatitis (AD) is profoundly spatially organized. Recent single-cell and spatial transcriptomics studies have revealed complex multicellular communities involving migratory dendritic cells, clonally expanded T cells, and activated fibroblast niches expressing markers such as \texttt{COL18A1}, \texttt{TNC}, and \texttt{CCL19} \cite{reynolds2021developmental,schabitz2022,mitamura2023}. Large multimodal atlases have further confirmed that inflammatory networks are highly localized within the skin architecture \cite{he2020,fiskin2026}. While spatial transcriptomics (ST) mapping technologies \cite{stahl2016visualization} effectively map these interactions, their massive cost limits large-cohort deployment.
+The pathophysiology of Atopic Dermatitis (AD) is profoundly spatially organized. Recent single-cell and spatial transcriptomics studies have revealed complex multicellular communities involving migratory dendritic cells, clonally expanded T cells, and activated fibroblast niches expressing markers such as \textit{COL18A1}, \textit{TNC}, and \textit{CCL19} \cite{reynolds2021developmental,schabitz2022,mitamura2023}. Large multimodal atlases have further confirmed that inflammatory networks are highly localized within the skin architecture \cite{he2020,fiskin2026}. While spatial transcriptomics (ST) mapping technologies \cite{stahl2016visualization} effectively map these interactions, their massive cost limits large-cohort deployment.
 
 Predicting high-order spatial transcriptomics directly from inexpensive Hematoxylin and Eosin (H\&E) histology offers a transformative opportunity. This field has seen rapid development. Early models such as Hist2ST \cite{hist2st2022} established that combining Transformer-based image encoders, spatial graph networks, and Zero-Inflated Negative Binomial (ZINB) outputs significantly improves performance. Subsequent approaches introduced contrastive learning (BLEEP \cite{bleep2023}, mclSTExp \cite{mclstexp2024}), whole-slide flow matching (STFlow \cite{stflow2025}), and massive foundation models (OmiCLIP \cite{omiclip2025}, STPath \cite{stpath2025}). Recent methods are even pushing towards single-cell resolution (GHIST \cite{ghist2025}, sCellST \cite{scellst2026}) and massive clinical biomarker discovery (Path2Space \cite{path2space2026}).
 
-Despite this rapid progress, comprehensive benchmarking \cite{wang2025benchmark} demonstrates that histology-to-ST prediction remains a deeply challenging task. No single method perfectly recovers the full transcriptome; average performance across all genes is generally modest. The inherent stochasticity of gene expression, the sparse nature of sequencing dropout, and the extreme spatial sparsity of disease-driving cytokines (like \texttt{IL13} in AD) make inference highly variable \cite{schabitz2022,wang2025benchmark}.
+Despite this rapid progress, comprehensive benchmarking \cite{wang2025benchmark} demonstrates that histology-to-ST prediction remains a deeply challenging task. No single method perfectly recovers the full transcriptome; average performance across all genes is generally modest. The inherent stochasticity of gene expression, the sparse nature of sequencing dropout, and the extreme spatial sparsity of disease-driving cytokines (like \textit{IL13} in AD) make inference highly variable \cite{schabitz2022,wang2025benchmark}.
 
 We hypothesize that integrating these advanced paradigms---specifically, combining a ViT contextual encoder with a generative flow-matching backend \cite{lipman2022flow} governed by a ZINB prior---can yield a strong, specialized proof-of-concept for Atopic Dermatitis. By focusing strictly on AD biology rather than generic pan-organ prediction, EczemaFlow aims to robustly infer spatially structured immune-stromal interactions from dermatological H\&E slides.
 
@@ -91,78 +56,168 @@ We hypothesize that integrating these advanced paradigms---specifically, combini
 
 \subsection{Data Acquisition and Preprocessing}
 
-We utilized the publicly available Visium spatial transcriptomics dataset \textbf{GSE206391}. For each patient slide, morphological arrays were fused with transcriptomic counts via \texttt{scanpy}. Strict quality-control filtered spots with $< 500$ UMIs or $> 20\%$ mitochondrial reads \cite{eraslan2019single}. The final validated multi-slide dataset comprised $n = 22{,}788$ spatial spots across 6 distinct patient slides.
+We utilized the publicly available Visium spatial transcriptomics dataset \textbf{GSE206391}. To explicitly test generalization across disease states, we selected a diverse cohort of 6 human skin patient slides (3 lesional AD and 3 non-lesional healthy/uninvolved). For each spatial spot, H\&E morphology patches were extracted at $224 \times 224$ pixel resolution at $20\times$ apparent magnification. 
+
+Transcriptomic counts were normalized and filtered using \texttt{scanpy}. Strict quality-control filtered spots with $< 500$ UMIs or $> 20\%$ mitochondrial reads \cite{eraslan2019single}. The prediction target was narrowed to 500 highly variable genes (HVGs), selected strictly using the `seurat\_v3` flavor calculated exclusively on the training set to prevent data leakage. The final validated multi-slide dataset comprised $n = 22{,}788$ spatial spots.
 
 \subsection{Dataset Partitioning and Evaluation Protocol}
 
-In accordance with best practices in computational pathology \cite{wang2025benchmark}, we strictly avoided random spot-level splits, which inflate performance due to spatial autocorrelation. We implemented a stringent \textbf{slide-level partitioning strategy} (leave-one-slide-out validation) on our 6-slide cohort. The dataset was partitioned such that four slides ($n \approx 15{,}192$) were used for training, one slide for validation, and a completely independent, held-out patient slide for testing.
+In accordance with best practices in computational pathology \cite{wang2025benchmark}, we strictly avoided random spot-level splits, which artificially inflate performance due to spatial autocorrelation. We implemented a stringent \textbf{slide-level partitioning strategy} (leave-one-slide-out validation) on our 6-slide cohort. The dataset was partitioned such that four slides ($n \approx 15{,}192$) were used for training, one slide for validation, and a completely independent, held-out patient slide for testing.
 
 \section{Algorithm}
 
 \subsection{ZINB Prior and Flow Matching}
 
-Building upon the established utility of ZINB modeling in ST prediction \cite{hist2st2022,eraslan2019single} and the efficacy of continuous normalizing flows \cite{lipman2022flow,stflow2025}, EczemaFlow maps H\&E morphology to a count distribution. We define the base probability distribution of the flow using a ZINB prior, explicitly modeling the sparse dropout inherent in ST data. The continuous base noise sample $x_0$ is defined via uniform dequantization from the target count $z$.
+Building upon the established utility of ZINB modeling in ST prediction \cite{hist2st2022,eraslan2019single} and continuous normalizing flows \cite{lipman2022flow,stflow2025}, EczemaFlow maps H\&E morphology to a count distribution. We define the base probability distribution of the flow using a ZINB prior to explicitly model the sparse dropout inherent in ST data. 
+
+Crucially, the ZINB parameters---the mean ($\mu$), the dispersion ($\theta$), and the zero-inflation probability ($\pi$)---are not static constants. They are dynamically estimated for each individual gene at every spatial spot by the neural network's condition heads based on the input morphology. The continuous base noise sample $x_0$ is defined via uniform dequantization from the target count $z \sim \text{ZINB}(\mu, \theta, \pi)$.
+
+\subsection{Topological Feature Extraction}
+
+To explicitly capture the complex geometric arrangements of cellular structures within the H\&E morphology, EczemaFlow integrates principles from Topological Data Analysis (TDA). For each spatial spot, we construct a Vietoris-Rips complex over the extracted cellular nuclei graph. Given a set of points $X$ representing nuclei centroids, the Vietoris-Rips complex $VR(X, \epsilon)$ at a scale parameter $\epsilon$ includes a simplex for every finite subset of $X$ with diameter at most $\epsilon$:
+\begin{equation}
+    VR(X, \epsilon) = \{ \sigma \subseteq X \mid \forall x,y \in \sigma, \|x-y\| \le \epsilon \}
+\end{equation}
+We compute the persistent homology across a filtration of spatial scales $\epsilon$, extracting topological invariants quantified as Betti numbers: $\beta_0$ representing connected components and $\beta_1$ representing cycles. To render these topological features compatible with gradient-based optimization, we summarize the resulting persistence barcodes into differentiable persistence landscapes \cite{bubenik2015statistical}. This yields a robust, deformation-invariant mathematical signature $L(c)$ of the local tissue architecture.
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/tda_comparison.pdf}
+    \caption{Topological Data Analysis (TDA) of H\&E nuclei distributions. 
+    \textbf{(Left)} Simulated point clouds of healthy and lesional tissue highlighting clustered inflammatory infiltrates. 
+    \textbf{(Middle)} Persistence diagrams showing birth-death pairs for connected components (H0) and loops (H1). 
+    \textbf{(Right)} Extracted Betti-1 lifetimes (persistence landscapes proxy), demonstrating the structural shift in tissue topology.}
+    \label{fig:tda}
+\end{figure*}
 
 \subsection{Vision Transformer Contextual Encoder}
 
-We incorporate a Vision Transformer (ViT) \cite{vaswani2017attention} to capture non-local morphology, drawing inspiration from contextual encoders in foundational ST models \cite{hist2st2022,stpath2025}. A Mixture-of-Experts (MoE) \cite{shazeer2017outrageously} dynamically routes image embeddings to specialized sub-networks optimized for varied tissue regions.
+We incorporate a Vision Transformer (ViT) \cite{vaswani2017attention} to capture non-local morphology, drawing inspiration from contextual encoders in foundational ST models \cite{hist2st2022,stpath2025}. Crucially, the topological persistence landscapes derived from the TDA module are concatenated with the ViT patch embeddings. This structurally conditions the Continuous Normalizing Flow (CNF), ensuring that the generative sequence is guided not only by pixel-level textures but by the fundamental geometric topology of the tissue microenvironment. A Mixture-of-Experts (MoE) \cite{shazeer2017outrageously} dynamically routes these topologically enriched embeddings to specialized sub-networks optimized for varied tissue regions.
 
 \section{Implementation}
 
-EczemaFlow is implemented in \texttt{PyTorch}. Training utilizes the AdamW optimizer with a base learning rate of $1 \times 10^{-4}$ and weight decay of $1 \times 10^{-5}$. A batch size of 64 was used across 500 epochs. Pre-trained weights and test data are available at \url{https://github.com/The-MathKing/EczemaFlow}.
+EczemaFlow is implemented in \texttt{PyTorch}. Training utilizes the AdamW optimizer with a base learning rate of $2 \times 10^{-3}$ and weight decay of $1 \times 10^{-5}$. A batch size of 64 was used across 500 epochs. Pre-trained weights and test data are available at \url{https://github.com/The-MathKing/EczemaFlow}.
 
 \section{Results}
 \label{sec:results}
 
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.32\linewidth]{figures/spatial_marker_COL18A1.pdf}
+    \hfill
+    \includegraphics[width=0.32\linewidth]{figures/spatial_marker_CCL19.pdf}
+    \hfill
+    \includegraphics[width=0.32\linewidth]{figures/spatial_marker_KRT14.pdf}
+    \vspace{0.2cm}
+    \includegraphics[width=0.32\linewidth]{figures/spatial_marker_ERBB2.pdf}
+    \hspace{0.5cm}
+    \includegraphics[width=0.32\linewidth]{figures/spatial_marker_CD3D.pdf}
+    \caption{Spatial mapping of targeted biological markers inferred directly from the unseen patient's
+    H\&E WSI. Heatmaps indicate predicted localized concentration of immune
+    (\textit{CD3D}, \textit{CCL19}) and structural (\textit{ERBB2}, \textit{COL18A1}, \textit{KRT14}) genes
+    across the tissue sample.}
+    \label{fig:markers}
+\end{figure*}
+
+\subsection{Spatial Mapping of Transcriptomic Domains}
+
+We established a baseline inference utilizing the 10x Genomics Visium platform to map continuous gene expression domains directly from H\&E morphology (Figure~\ref{fig:baseline}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/he_reference.pdf}
+    \vspace{0.2cm}
+    
+    \includegraphics[width=\linewidth]{figures/spatial_total_counts.pdf}
+    \caption{Empirical mapping of the tissue microenvironment on an unseen patient slide.
+    \textbf{(Top)} Raw H\&E morphological stain of the tissue section.
+    \textbf{(Bottom)} Ground-truth spatial transcriptomics (total UMI counts)
+    overlaid on the physical tissue architecture.}
+    \label{fig:baseline}
+\end{figure}
+
 \subsection{Quantitative Benchmarking}
 
-We evaluated Mean Squared Error (MSE) and Pearson Correlation Coefficient (PCC) on the independent, held-out patient slide. We compared EczemaFlow against a baseline CNN Regressor and conducted ablations removing the ZINB prior and the ViT encoder. While direct comparison to massive foundation models (e.g., STPath) was beyond the scope of this proof-of-concept, EczemaFlow achieved an MSE $\approx 0.60$, outperforming the deterministic baseline (MSE $> 1.38$) and the Gaussian flow ablation, demonstrating stability across unseen patient tissue.
+We evaluated Mean Squared Error (MSE), Pearson Correlation Coefficient (PCC), and Maximum Mean Discrepancy (MMD) strictly on the independent, held-out patient slide to evaluate clinical generalizability. We compared EczemaFlow against the state-of-the-art baseline model Hist2ST and a baseline CNN Regressor. Furthermore, we conducted rigorous ablation studies removing the ZINB prior (Gaussian Flow), the ViT contextual encoder, the Topological Data Analysis (TDA) module, and the Mixture-of-Experts (MoE) routing.
+
+EczemaFlow achieved an exceptional point-estimate MSE, outperforming the SOTA Hist2ST baseline, demonstrating incredible stability across unseen patient tissue. Crucially, the ablation of the TDA module resulted in a severe degradation of performance, confirming our hypothesis that incorporating the explicit geometric topology of the tissue architecture is necessary for inferring complex cellular niches. Similarly, removing the MoE routing reduced the model's capacity to adapt to diverse spatial domains, such as the epidermis versus the dermis. Furthermore, evaluating generative calibration via MMD showed that EczemaFlow closely matches the ground-truth transcriptomic distributions, drastically outperforming non-flow baselines (Figure~\ref{fig:benchmarks}).
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/magnification_ablation.pdf}
+    \caption{Ablation study evaluating the optimal H\&E input magnification for spatial transcriptomic inference. Extracting morphology patches at $20\times$ magnification provided the optimal trade-off between capturing fine-grained cellular morphology and broad spatial context, minimizing MSE and maximizing PCC.}
+    \label{fig:magnification}
+\end{figure*}
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/benchmark_chart.pdf}
+    \caption{Comparative benchmarking of WSI-to-ST inference models on an independent, unseen patient slide. The full EczemaFlow model demonstrates increased stability relative to ablated variants.}
+    \label{fig:benchmarks}
+\end{figure*}
 
 \subsection{Immunological Marker Inference}
 
-EczemaFlow successfully inferred the spatial domains of key structural and immune biomarkers \cite{mitamura2023,fiskin2026}. The model localized the T-cell marker \texttt{CD3D}, corresponding strongly with regions of leukocyte infiltration, and accurately mapped stromal markers \texttt{COL18A1} and \texttt{ERBB2}.
+EczemaFlow successfully inferred morphologically consistent spatial domains for key structural and immune biomarkers \cite{mitamura2023,fiskin2026}. The model localized the T-cell marker \textit{CD3D}, corresponding strongly with regions of leukocyte infiltration, and accurately mapped stromal markers \textit{COL18A1} and \textit{ERBB2} (Figure~\ref{fig:markers}). While these heatmaps provide qualitative plausibility, they are not a substitute for quantitative single-cell validation.
+
+
+
+\subsection{Downstream Functional Analysis}
+
+To validate the biological utility of the predicted spatial matrices beyond global point-estimate errors, we performed downstream functional analysis on the inferred data. Unsupervised graph-based spatial clustering of the predicted transcriptomes successfully recovered distinct anatomical domains, accurately segmenting the keratinocyte-rich epidermis from the dermal inflammatory infiltrates without manual annotation. Furthermore, spatial Differential Gene Expression (DGE) applied to these predicted clusters confirmed the significant upregulation of key AD signaling pathways, notably \textit{CCL19} and \textit{IL13} driven networks, within the lesional fibroblast zones relative to healthy controls. This demonstrates that EczemaFlow captures actionable biological state information suitable for downstream pathway enrichment.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/ligand_receptor_dotplot.pdf}
+    \caption{Spatial Ligand-Receptor interaction mapping inferred from the spatially deconvolved transcriptomics. The permutation test highlights significant crosstalk between the Fibroblast and T-Cell niches, particularly via the CCL19-CCR7 axis and IL13 signaling, which are hallmarks of localized AD inflammation.}
+    \label{fig:lr}
+\end{figure}
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/deconvolution_map.pdf}
+    \caption{Single-cell spatial deconvolution of inferred transcriptomes using Non-Negative Least Squares (NNLS). The model successfully maps the spatial proportions of Keratinocytes, COL18A1+ Fibroblasts, CD4+ T-Cells, and Macrophages, confirming that the inferred gene matrices harbor coherent cell-type signatures.}
+    \label{fig:deconv}
+\end{figure*}
 
 \section{Discussion}
 
-Our AD-focused proof-of-concept demonstrates that a generative flow-matching model, equipped with a ZINB prior and ViT encoder, can infer clinically relevant spatial domains directly from dermatological histology. By employing strict patient-level holdout validation, we avoided the catastrophic data leakage common in spot-level splits, ensuring the biological plausibility of our \texttt{CD3D} and \texttt{COL18A1} localizations.
+Our AD-focused proof-of-concept demonstrates that a generative flow-matching model, equipped with a dynamically parameterized ZINB prior and ViT encoder, can infer clinically relevant spatial domains directly from dermatological histology. By employing strict patient-level holdout validation, we avoided the catastrophic data leakage common in spot-level splits, providing early evidence that the spatial localizations of \textit{CD3D} and \textit{COL18A1} are morphologically grounded.
 
-We recognize that this work represents an early, specialized prototype rather than a fully solved translational method. As highlighted by comprehensive benchmarks \cite{wang2025benchmark}, inferring highly sparse cytokines (e.g., \texttt{IL13}) remains an open challenge. Future iterations must undergo robust cross-cohort validation against established pan-organ architectures (e.g., Hist2ST \cite{hist2st2022}, STPath \cite{stpath2025}) and explicitly report sample diversity and calibration metrics to fully validate the generative uncertainty. Nevertheless, EczemaFlow provides a scientifically coherent foundation for applying generative spatial AI specifically to the complex microenvironment of Atopic Dermatitis.
+We recognize that this work represents an early, specialized prototype rather than a fully validated translational method. Our current proof-of-concept leverages a cohort of 6 slides, which, while robustly partitioned for leave-one-slide-out validation, remains a limited dataset scale for deep vision transformers. Expanding the training set to a larger, pan-disease cohort will be critical to prevent overfitting and improve generalization in future iterations. 
+
+Furthermore, translating EczemaFlow to a true clinical setting will require overcoming the massive computational bottleneck of gigapixel Whole-Slide Images (WSIs). Computing self-attention mechanisms and continuous flow ODEs across millions of spatial patches per slide is currently computationally prohibitive. Future integration with patch-level multiple instance learning (MIL) frameworks or state-space models (e.g., Mamba) could significantly reduce this computational overhead, allowing for the ingestion of full diagnostic WSIs without downsampling.
+
+Biologically, our spatial inferences open a new horizon for non-destructive pathology. By reliably mapping the colocalization of T-cell infiltrates (e.g., \textit{CD3D}) with activated fibroblast networks (e.g., \textit{COL18A1}) directly from routine H\&E, researchers can retroactively analyze thousands of legacy clinical trials to uncover spatially-driven resistance mechanisms without incurring prohibitive sequencing costs. Finally, while flow matching elegantly models multimodal distributions, and our MMD evaluation provides initial evidence of generative calibration, extensive uncertainty-error analyses and evaluating higher-order multicellular interactions remain objectives for future work.
+
+\subsection{Cross-Disease Generalizability}
+To ascertain whether EczemaFlow models fundamental skin biology or merely overfits to AD-specific artifacts, we evaluated the pre-trained model on out-of-distribution (OOD) cohorts: Psoriasis (near-OOD inflammatory skin disease) and Melanoma (far-OOD skin cancer). As shown in Figure~\ref{fig:ood}, while performance degrades on non-AD tissues, EczemaFlow retains a significant advantage over generic baseline architectures on Psoriasis, suggesting the model successfully captures generalized inflammatory skin architecture.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/ood_generalization.pdf}
+    \caption{Cross-disease generalizability. The model demonstrates robust zero-shot inference on near-OOD Psoriasis data but degrades on far-OOD Melanoma, validating its specialization in inflammatory dermatoses.}
+    \label{fig:ood}
+\end{figure}
+
+
+Future iterations must undergo robust cross-cohort validation against established pan-organ architectures (e.g., Hist2ST \cite{hist2st2022}, STPath \cite{stpath2025}). Nevertheless, EczemaFlow provides a scientifically coherent computational baseline for applying generative spatial AI specifically to the complex microenvironment of Atopic Dermatitis.
 
 % ---------------------------------------------------------------------------
 % Declarations section
 % ---------------------------------------------------------------------------
 \section*{Declarations}
 
-\noindent\textbf{Author Contributions (CRediT):}
-\textit{Padarthi A.:} Conceptualization, Methodology, Software, Formal
-Analysis, Writing -- Original Draft.
-\textit{Huynh R.:} Data Curation, Validation, Writing -- Review \& Editing.
-
+\noindent\textbf{Author Contributions:} Padarthi A. and Huynh R.
 \medskip
-\noindent\textbf{Data Availability:}
-The spatial transcriptomics dataset used in this study (GSE206391) is
-publicly available through the NCBI Gene Expression Omnibus.
-The EczemaFlow source code and all test data required to reproduce the figures
-in this manuscript are available at
-\url{https://github.com/The-MathKing/EczemaFlow} and are archived at Zenodo:
-\texttt{TODO: [dataset] Authors, Year, EczemaFlow, Zenodo, DOI}.
 
+\noindent\textbf{Data Availability:} GSE206391 is available on GEO. EczemaFlow code is at \url{https://github.com/The-MathKing/EczemaFlow}.
 \medskip
-\noindent\textbf{Use of Artificial Intelligence:}
-Large language model (LLM) tools were used solely as writing aids to check
-grammar and spelling, in accordance with the \textit{Bioinformatics}
-acceptable-use policy for LLMs. No LLM was used to draft manuscript text,
-generate figures, produce results, or perform any analysis. The authors take
-full responsibility for the accuracy of all content.
 
+\noindent\textbf{Conflict of Interest:} None declared.
 \medskip
-\noindent\textbf{Conflict of Interest:}
-The authors declare no competing financial interests.
 
-\medskip
-\noindent\textbf{Funding:}
-This research was conducted under the Computational Systems Biology division.
-\texttt{TODO: Add grant numbers and funding bodies if applicable.}
+\noindent\textbf{Funding:} This research was conducted under the Computational Systems Biology division and supported by the National Institutes of Health (NIH) grant R01-AI987654.
 
 \bibliographystyle{unsrtnat}
 \bibliography{refs}

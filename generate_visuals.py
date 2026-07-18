@@ -13,13 +13,13 @@ def generate_visuals(data_path, output_dir):
     
     # 1. Spatial overlay with total counts
     print("Generating Spatial Plot (Total Counts)...")
-    sc.pl.spatial(adata, color="total_counts", show=False)
+    sc.pl.spatial(adata, color="total_counts", library_id='P15509_1001', show=False)
     plt.savefig(os.path.join(output_dir, 'spatial_total_counts.pdf'), bbox_inches='tight', dpi=300)
     plt.close()
     
     # 2. Spatial overlay with number of genes
     print("Generating Spatial Plot (Number of Genes)...")
-    sc.pl.spatial(adata, color="n_genes_by_counts", show=False)
+    sc.pl.spatial(adata, color="n_genes_by_counts", library_id='P15509_1001', show=False)
     plt.savefig(os.path.join(output_dir, 'spatial_n_genes.pdf'), bbox_inches='tight', dpi=300)
     plt.close()
     
@@ -33,21 +33,21 @@ def generate_visuals(data_path, output_dir):
             markers.append(gene)
             
     if markers:
-        sc.pl.spatial(adata, color=markers, show=False)
-        plt.savefig(os.path.join(output_dir, 'spatial_markers.pdf'), bbox_inches='tight', dpi=300)
-        plt.close()
+        for m in markers:
+            sc.pl.spatial(adata, color=m, library_id='P15509_1001', show=False)
+            plt.savefig(os.path.join(output_dir, f'spatial_marker_{m}.pdf'), bbox_inches='tight', dpi=300)
+            plt.close()
     
     # 4. Simple H&E image without spots (just the tissue)
     print("Generating H&E reference image...")
-    sc.pl.spatial(adata, color=None, alpha=0.0, show=False)
+    sc.pl.spatial(adata, color=None, alpha=0.0, library_id='P15509_1001', show=False)
     plt.savefig(os.path.join(output_dir, 'he_reference.pdf'), bbox_inches='tight', dpi=300)
     plt.close()
 
     print(f"Visuals successfully saved to {output_dir}")
 
 if __name__ == "__main__":
-    dataset_name = 'V1_Breast_Cancer_Block_A_Section_1'
-    data_path = f'./data/{dataset_name}.h5ad'
+    data_path = '/Volumes/2TB/GSE206391_Preprocessed_data.h5'
     output_dir = './paper/figures'
     
     if os.path.exists(data_path):

@@ -44,3 +44,36 @@ class GaussianPrior(nn.Module):
 
 # We will monkey-patch or subclass EczemaFlowModel in the benchmark script 
 # to swap the prior for GaussianFlowModel.
+
+class Hist2STBaseline(nn.Module):
+    """
+    Baseline 2: Hist2ST surrogate model.
+    Uses contextual encoding followed by regression.
+    """
+    def __init__(self, num_genes=500, cond_dim=256):
+        super().__init__()
+        self.encoder = MorphologyEncoder(embed_dim=cond_dim)
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=cond_dim, nhead=4, dim_feedforward=512, batch_first=True),
+            num_layers=2
+        )
+        self.regressor = nn.Sequential(
+            nn.Linear(cond_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, num_genes)
+        )
+
+    def forward(self, patches):
+        b, n, c, h, w = patches.shape
+        patches_flat = patches.view(b * n, c, h, w)
+        features = self.encoder(patches_flat) # (b*n, cond_dim)
+        features = features.view(b, n, -1) # (b, n, cond_dim)
+        
+        # Contextual encoding
+        context_features = self.transformer(features)
+        
+        # Aggregate (mean pool) for the spot
+        context_features = context_features.mean(dim=1)
+        
+        preds = self.regressor(context_features)
+        return preds
