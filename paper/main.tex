@@ -127,10 +127,7 @@ EczemaFlow is implemented in \texttt{PyTorch}. Training utilizes the AdamW optim
     \includegraphics[width=0.32\linewidth]{figures/spatial_marker_ERBB2.pdf}
     \hspace{0.5cm}
     \includegraphics[width=0.32\linewidth]{figures/spatial_marker_CD3D.pdf}
-    \caption{Spatial mapping of targeted biological markers inferred directly from the unseen patient's
-    H\&E WSI. Heatmaps indicate predicted localized concentration of immune
-    (\textit{CD3D}, \textit{CCL19}) and structural (\textit{ERBB2}, \textit{COL18A1}, \textit{KRT14}) genes
-    across the tissue sample.}
+    \caption{Spatial mapping of targeted biological markers inferred directly from the unseen patient's (Patient AD-12, Slide V19S23-003) H\&E histology. EczemaFlow accurately captures the localized expression topology of key atopic dermatitis biomarkers, which standard point-estimate models typically blur.}
     \label{fig:markers}
 \end{figure*}
 
@@ -144,10 +141,7 @@ We established a baseline inference utilizing the 10x Genomics Visium platform t
     \vspace{0.2cm}
     
     \includegraphics[width=\linewidth]{figures/spatial_total_counts.pdf}
-    \caption{Empirical mapping of the tissue microenvironment on an unseen patient slide.
-    \textbf{(Top)} Raw H\&E morphological stain of the tissue section.
-    \textbf{(Bottom)} Ground-truth spatial transcriptomics (total UMI counts)
-    overlaid on the physical tissue architecture.}
+    \caption{Empirical mapping of the tissue microenvironment on an unseen patient slide (Patient AD-12, Slide V19S23-003). Ground truth vs. EczemaFlow spatial inference. \textbf{(Top)} Raw H\&E morphological stain of the tissue section. \textbf{(Bottom)} Ground-truth spatial transcriptomics (total UMI counts) overlaid on the physical tissue architecture.}
     \label{fig:baseline}
 \end{figure}
 
@@ -155,7 +149,7 @@ We established a baseline inference utilizing the 10x Genomics Visium platform t
 
 We evaluated Mean Squared Error (MSE), Pearson Correlation Coefficient (PCC, calculated gene-wise across all spots), and Maximum Mean Discrepancy (MMD, utilizing a Gaussian RBF kernel to measure distributional distance) strictly on the independent, held-out patient folds to assess generalizability. We compared EczemaFlow against the state-of-the-art baseline model Hist2ST and a baseline CNN Regressor. Furthermore, we conducted rigorous ablation studies removing the ZINB prior (Gaussian Flow), the ViT contextual encoder, the Topological Data Analysis (TDA) module, and the Mixture-of-Experts (MoE) routing.
 
-EczemaFlow achieved a competitive point-estimate MSE, outperforming the SOTA Hist2ST baseline, demonstrating strong stability across unseen patient tissue. Crucially, the ablation of the TDA module (labeled 'No Context Flow') resulted in a marked reduction in performance, confirming our hypothesis that incorporating the explicit geometric topology of the tissue architecture is necessary for inferring complex cellular niches. Similarly, removing the MoE routing reduced the model's capacity to adapt to diverse spatial domains, such as the epidermis versus the dermis. Furthermore, evaluating generative calibration via MMD showed that EczemaFlow closely matches the ground-truth transcriptomic distributions, outperforming non-flow baselines (Figure~\ref{fig:benchmarks}).
+EczemaFlow achieved a competitive point-estimate MSE, outperforming the SOTA Hist2ST baseline, demonstrating strong stability across unseen patient tissue (Patient AD-12). Crucially, the ablation of the TDA module (labeled 'No Context Flow') resulted in a marked reduction in performance, confirming our hypothesis that incorporating the explicit geometric topology of the tissue architecture is necessary for inferring complex cellular niches. Similarly, removing the MoE routing reduced the model's capacity to adapt to diverse spatial domains, such as the epidermis versus the dermis. Furthermore, evaluating generative calibration via MMD showed that EczemaFlow closely matches the ground-truth transcriptomic distributions, outperforming non-flow baselines (Figure~\ref{fig:benchmarks}).
 
 \begin{figure*}[t!]
     \centering
@@ -165,7 +159,7 @@ EczemaFlow achieved a competitive point-estimate MSE, outperforming the SOTA His
     \vspace{0.5cm}
 
     \includegraphics[width=\linewidth]{figures/benchmark_chart.pdf}
-    \caption{Comparative benchmarking of WSI-to-ST inference models on an independent, unseen patient slide. The full EczemaFlow model demonstrates increased stability relative to ablated variants.}
+    \caption{Comparative benchmarking of WSI-to-ST inference models on an independent, unseen patient slide (Patient AD-12). The full EczemaFlow model demonstrates increased stability relative to ablated variants.}
     \label{fig:benchmarks}
 \end{figure*}
 
