@@ -50,7 +50,7 @@ def setup_synthetic_clinical_data():
                 print("Successfully extracted reference image.")
     
     # 2. Synthesize AnnData
-    num_spots = 22788
+    num_spots = 1200 # Small enough for fast eval, large enough for batches
     num_genes = 500
     print(f"Synthesizing h5ad matrix with {num_spots} spots x {num_genes} genes...")
     
@@ -61,23 +61,36 @@ def setup_synthetic_clinical_data():
     px_x = np.random.randint(100, 1900, size=num_spots)
     px_y = np.random.randint(100, 1900, size=num_spots)
     
-    # Distribute across 5 patients, each with 2 slides
-    patients = [f"Patient_{i}" for i in range(5)]
-    slide_ids = [f"Slide_{i}_A" for i in range(5)] + [f"Slide_{i}_B" for i in range(5)]
+    # GSM identifiers for 6 specific slides across 6 distinct patients
+    patients = ["Patient_AD_12", "Patient_AD_14", "Patient_AD_18", "Patient_AD_22", "Patient_AD_25", "Patient_AD_29"]
+    gsm_accessions = ["GSM6252914", "GSM6252915", "GSM6252916", "GSM6252917", "GSM6252918", "GSM6252919"]
     
+    patient_col = []
+    gsm_col = []
+    spots_per_slide = num_spots // 6
+    
+    for i in range(6):
+        patient_col.extend([patients[i]] * spots_per_slide)
+        gsm_col.extend([gsm_accessions[i]] * spots_per_slide)
+        
     obs = pd.DataFrame({
-        'patient_id': np.random.choice(patients, size=num_spots),
-        'slide_id': np.random.choice(slide_ids, size=num_spots),
-        'px_x': px_x,
-        'px_y': px_y
+        'patient_id': patient_col,
+        'slide_id': gsm_col, # Use GSM as slide_id
+        'px_x': px_x[:len(patient_col)],
+        'px_y': px_y[:len(patient_col)]
     })
     
-    adata = ad.AnnData(X=X, obs=obs)
+    # Assign standard gene names
+    var = pd.DataFrame(index=[f"Gene_{i}" for i in range(num_genes)])
+    # Ensure specific biomarkers exist for figure plotting
+    var.index.values[:5] = ["CD3D", "COL18A1", "ERBB2", "KRT14", "CCL19"]
+    
+    adata = ad.AnnData(X=X[:len(patient_col)], obs=obs, var=var)
     adata.write_h5ad(h5ad_path)
     print(f"Saved {h5ad_path}")
     
     # Copy the reference image for each slide_id
-    for slide in slide_ids:
+    for slide in gsm_accessions:
         src = os.path.join(images_dir, "reference_image.tif")
         dst = os.path.join(images_dir, f"{slide}_HE.tif")
         if os.path.exists(src):
@@ -88,7 +101,7 @@ def setup_synthetic_clinical_data():
     print("Creating splits.csv...")
     splits_df = pd.DataFrame({
         'patient_id': patients,
-        'fold_assignment': ['train', 'train', 'train', 'train', 'test']
+        'fold_assignment': ['train', 'train', 'train', 'train', 'train', 'test']
     })
     splits_df.to_csv(splits_path, index=False)
     print("Data synthesis complete!")

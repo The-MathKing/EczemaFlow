@@ -8,26 +8,25 @@ class MorphologyEncoder(nn.Module):
     """
     def __init__(self, embed_dim=256, use_pretrained=True):
         super().__init__()
-        # Use ResNet50 as a feature extractor
-        weights = models.ResNet50_Weights.DEFAULT if use_pretrained else None
-        resnet = models.resnet50(weights=weights)
+        # Use ViT_B_16 as the image encoder, as claimed in the manuscript
+        weights = models.ViT_B_16_Weights.DEFAULT if use_pretrained else None
+        self.vit = models.vit_b_16(weights=weights)
         
-        # Remove the final classification layer
-        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
+        # We override the final classification head to output our desired embedding dimension
+        in_features = self.vit.heads.head.in_features
+        self.vit.heads.head = nn.Linear(in_features, embed_dim)
         
-        # Freeze the backbone to save compute time and memory
-        for param in self.backbone.parameters():
-            param.requires_grad = False
-            
-        self.projection = nn.Linear(2048, embed_dim)
+        # Freeze the transformer blocks to save compute time and memory, but leave the head trainable
+        for name, param in self.vit.named_parameters():
+            if not name.startswith("heads.head"):
+                param.requires_grad = False
 
     def forward(self, patches):
         """
         patches: (batch_size * num_patches, channels, height, width)
         """
-        features = self.backbone(patches) # (B*N, 2048, 1, 1)
-        features = features.view(features.size(0), -1) # (B*N, 2048)
-        features = self.projection(features) # (B*N, embed_dim)
+        # vit_b_16 requires 224x224 input
+        features = self.vit(patches) # (B*N, embed_dim)
         return features
 
 class ViTContextualEncoder(nn.Module):

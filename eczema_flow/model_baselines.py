@@ -42,21 +42,16 @@ class GaussianPrior(nn.Module):
     def sample(self, batch_size):
         return torch.randn(batch_size, self.num_genes, device=self.device)
 
-# We will monkey-patch or subclass EczemaFlowModel in the benchmark script 
-# to swap the prior for GaussianFlowModel.
-
 class Hist2STBaseline(nn.Module):
     """
     Baseline 2: Hist2ST surrogate model.
-    Uses contextual encoding followed by regression.
+    Implements a CNN image encoder followed by a Transformer for spatial context,
+    predicting ZINB parameters directly (non-flow).
     """
     def __init__(self, num_genes=500, cond_dim=256):
         super().__init__()
         self.encoder = MorphologyEncoder(embed_dim=cond_dim)
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=cond_dim, nhead=4, dim_feedforward=512, batch_first=True),
-            num_layers=2
-        )
+        self.transformer = nn.TransformerEncoderLayer(d_model=cond_dim, nhead=4, batch_first=True)
         self.regressor = nn.Sequential(
             nn.Linear(cond_dim, 512),
             nn.ReLU(),
@@ -67,13 +62,11 @@ class Hist2STBaseline(nn.Module):
         b, n, c, h, w = patches.shape
         patches_flat = patches.view(b * n, c, h, w)
         features = self.encoder(patches_flat) # (b*n, cond_dim)
-        features = features.view(b, n, -1) # (b, n, cond_dim)
+        features = features.view(b, n, -1)
         
-        # Contextual encoding
-        context_features = self.transformer(features)
+        # Spatial context via Transformer (proxy for spatial graphs in dense patches)
+        features = self.transformer(features)
+        features = features.mean(dim=1)
         
-        # Aggregate (mean pool) for the spot
-        context_features = context_features.mean(dim=1)
-        
-        preds = self.regressor(context_features)
+        preds = self.regressor(features)
         return preds

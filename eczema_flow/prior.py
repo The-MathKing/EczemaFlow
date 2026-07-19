@@ -10,6 +10,41 @@ class ZINBPrior(nn.Module):
         self.log_r = nn.Parameter(torch.zeros(num_genes))
         self.logit_p = nn.Parameter(torch.zeros(num_genes))
         self.logit_pi = nn.Parameter(torch.zeros(num_genes) - 1.0)
+        
+    def fit_to_data(self, adata):
+        """
+        Fits the static global ZINB prior to empirical spatial transcriptomics data.
+        Calculates expected zero-inflation (pi) and negative binomial parameters
+        (r, p) using method of moments on the raw count matrix.
+        """
+        print("Fitting ZINB prior to empirical distribution...")
+        import numpy as np
+        X = adata.X
+        if hasattr(X, 'toarray'):
+            X = X.toarray()
+            
+        means = np.mean(X, axis=0)
+        variances = np.var(X, axis=0)
+        zero_props = np.mean(X == 0, axis=0)
+        
+        # Method of moments estimation
+        # r = mean^2 / (var - mean), clamped for stability
+        r_vals = np.square(means) / np.maximum(variances - means, 1e-4)
+        r_vals = np.clip(r_vals, 1e-4, 100.0)
+        
+        # p = var / (mean + var), clamped
+        p_vals = variances / np.maximum(means + variances, 1e-4)
+        p_vals = np.clip(p_vals, 1e-4, 0.99)
+        
+        # zero inflation (pi) = empirical zero proportion
+        pi_vals = np.clip(zero_props, 1e-4, 0.99)
+        
+        with torch.no_grad():
+            self.log_r.copy_(torch.tensor(np.log(r_vals), dtype=torch.float32, device=self.device))
+            # logit(p) = log(p / (1-p))
+            self.logit_p.copy_(torch.tensor(np.log(p_vals / (1 - p_vals)), dtype=torch.float32, device=self.device))
+            self.logit_pi.copy_(torch.tensor(np.log(pi_vals / (1 - pi_vals)), dtype=torch.float32, device=self.device))
+        print("ZINB prior fitted successfully.")
 
     def sample(self, batch_size):
         with torch.no_grad():

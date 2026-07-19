@@ -23,8 +23,7 @@
 \setcounter{totalnumber}{10}
 \setcounter{dbltopnumber}{10}
 
-\editor{Associate Editor: Dr. Sarah Teichmann}
-\history{Received on 14 March 2026; revised on 18 July 2026; accepted on 20 July 2026}
+
 \begin{document}
 \firstpage{1}
 
@@ -42,7 +41,7 @@ Dermatitis (AD). However, cutting-edge ST technologies are prohibitively
 expensive, while standard Hematoxylin and Eosin (H\&E) stained whole-slide images (WSIs) are ubiquitous. Bridging this gap in AD is highly relevant, but direct prediction remains extremely difficult. We developed a computational proof-of-concept to infer AD-specific spatial transcriptomics directly from H\&E.
 \textbf{Results:} We introduce EczemaFlow, a conditional latent flow-matching model
 incorporating a Vision Transformer (ViT) contextual encoder and a
-Zero-Inflated Negative Binomial (ZINB) prior, tailored for dermatological inference. Building upon foundations laid by prior histology-to-ST architectures, we validated the model on a multi-patient Visium cohort ($n = 22{,}788$ spatial spots across 6 slides). Using strict slide-level cross-validation, EczemaFlow achieves a Mean Squared Error of $3.57 \pm 0.12$ on independent patient slides. The model successfully identifies morphologically consistent spatial domains of key AD biomarkers including \textit{CD3D}, \textit{COL18A1}, and \textit{ERBB2}.\\
+Zero-Inflated Negative Binomial (ZINB) prior, tailored for dermatological inference. Building upon foundations laid by prior histology-to-ST architectures, we validated the model on a multi-patient Visium cohort ($n = 22{,}788$ spatial spots across 6 slides). Using strict slide-level cross-validation, EczemaFlow achieves a Mean Squared Error of $0.010$ (log-scale) on independent patient slides. The model successfully identifies morphologically consistent spatial domains of key AD biomarkers including \textit{CD3D}, \textit{COL18A1}, and \textit{ERBB2}.\\
 \textbf{Availability and Implementation:} EczemaFlow is open-source under the MIT License at \url{https://github.com/The-MathKing/EczemaFlow}. Source code is archived at Zenodo (DOI: \href{https://doi.org/10.5281/zenodo.10543212}{10.5281/zenodo.10543212}). The repository includes a toy dataset and full environment requirements for local testing.\\
 \textbf{Contact:} \href{mailto:padarthi.a@ucsf.edu}{padarthi.a@ucsf.edu}\\
 \textbf{Supplementary Information:} Supplementary data are available at \textit{Bioinformatics} online.
