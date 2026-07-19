@@ -76,12 +76,17 @@ class ViTContextualEncoder(nn.Module):
 
 class ConditioningNetwork(nn.Module):
     """
-    Combines the Morphology Encoder and ViT Contextual Encoder module.
+    Combines the Morphology Encoder, TDA Feature Extractor, and ViT Contextual Encoder.
     """
-    def __init__(self, embed_dim=256):
+    def __init__(self, embed_dim=256, tda_dim=64):
         super().__init__()
         self.encoder = MorphologyEncoder(embed_dim=embed_dim)
-        self.attention = ViTContextualEncoder(embed_dim=embed_dim)
+        # We import TDA locally to avoid circular import if needed, or import at top
+        from .tda import TDAFeatureExtractor
+        self.tda = TDAFeatureExtractor(output_dim=tda_dim)
+        
+        # The ViT now takes the concatenated embed_dim + tda_dim
+        self.attention = ViTContextualEncoder(embed_dim=embed_dim + tda_dim)
         
     def forward(self, patches):
         """
@@ -92,8 +97,26 @@ class ConditioningNetwork(nn.Module):
         patches_flat = patches.view(b * n, c, h, w)
         
         # Extract features
-        patch_features = self.encoder(patches_flat)
+        patch_features = self.encoder(patches_flat) # (b*n, embed_dim)
+        
+        # Extract TDA features
+        tda_features = self.tda(patches) # (b, n, tda_dim)
+        tda_features_flat = tda_features.view(b * n, -1)
+        
+        # Concatenate Morphology and TDA features
+        combined_features = torch.cat([patch_features, tda_features_flat], dim=-1)
         
         # Apply ViT Contextual Encoder
-        contextual_embeds = self.attention(patch_features, num_patches_per_spot=n)
+        contextual_embeds = self.attention(combined_features, num_patches_per_spot=n)
         return contextual_embeds
+
+    def forward_precomputed(self, combined_features):
+        """
+        Bypasses the CNN and TDA extraction. Directly pipes the pre-computed 
+        dense embeddings (b, n, embed_dim + tda_dim) into the ViT.
+        """
+        b, n, d = combined_features.shape
+        combined_features_flat = combined_features.view(b * n, d)
+        contextual_embeds = self.attention(combined_features_flat, num_patches_per_spot=n)
+        return contextual_embeds
+

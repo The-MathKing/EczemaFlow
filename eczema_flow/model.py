@@ -2,33 +2,36 @@ import torch
 import torch.nn as nn
 from .attention import ConditioningNetwork
 from .moe import MoEVectorField
-from .prior import ZINBPrior, GaussianPrior
+from .prior import ZINBPrior, GaussianPrior, DynamicZINBPrior
 
 class EczemaFlowModel(nn.Module):
     """
     Complete EczemaFlow framework combining:
     - ViT Contextual Encoder Conditioning
     - MoE Vector Field
-    - ZINB Prior integration
+    - Dynamic ZINB Prior integration
     """
-    def __init__(self, num_genes=500, cond_dim=256, num_experts=4, device='cpu'):
+    def __init__(self, num_genes=500, cond_dim=256, tda_dim=64, num_experts=4, device='cpu'):
         super().__init__()
         self.device = device
-        self.conditioner = ConditioningNetwork(embed_dim=cond_dim)
+        self.conditioner = ConditioningNetwork(embed_dim=cond_dim, tda_dim=tda_dim)
+        
+        # Total condition dimension is embed_dim + tda_dim
+        total_cond_dim = cond_dim + tda_dim
+        
         self.vector_field = MoEVectorField(
             num_experts=num_experts, 
             x_dim=num_genes, 
-            cond_dim=cond_dim
+            cond_dim=total_cond_dim
         )
-        # Use Gaussian Prior to avoid MPS CPU Fallbacks associated with ZINB
-        self.prior = GaussianPrior(num_genes=num_genes, device=device)
+        self.prior = DynamicZINBPrior(cond_dim=total_cond_dim, num_genes=num_genes, device=device)
         self.num_genes = num_genes
 
     def forward_vector_field(self, t, x, c):
         """Wrapper for ODE solvers."""
         return self.vector_field(t, x, c)
 
-    def compute_loss(self, patches, target_counts):
+    def compute_loss(self, patches, target_counts, is_precomputed=False):
         """
         Compute the Flow Matching objective.
         Optimal Transport Flow Matching (OT-FM) loss:
@@ -44,14 +47,17 @@ class EczemaFlowModel(nn.Module):
         batch_size = patches.size(0)
         
         # 1. Obtain morphology condition
-        c = self.conditioner(patches)
+        if is_precomputed:
+            c = self.conditioner.forward_precomputed(patches)
+        else:
+            c = self.conditioner(patches)
         
         # 2. Sample target x_1 (empirical ST data)
         # We apply log1p as standard preprocessing for counts
         x_1 = torch.log1p(target_counts).to(self.device)
         
-        # 3. Sample base noise x_0 from ZINB prior
-        x_0 = self.prior.sample(batch_size).to(self.device)
+        # 3. Sample base noise x_0 from dynamically conditioned ZINB prior
+        x_0 = self.prior.sample(c).to(self.device)
         
         # 4. Sample time t uniformly
         t = torch.rand(batch_size, 1, device=self.device)
@@ -70,7 +76,7 @@ class EczemaFlowModel(nn.Module):
         
         return loss
 
-    def sample(self, patches, num_steps=50):
+    def sample(self, patches, num_steps=50, is_precomputed=False):
         """
         Sample from the model given morphology patches using an ODE solver.
         Requires `torchdiffeq`.
@@ -80,11 +86,13 @@ class EczemaFlowModel(nn.Module):
         except ImportError:
             raise ImportError("Please install torchdiffeq to sample: pip install torchdiffeq")
             
-        batch_size = patches.size(0)
-        c = self.conditioner(patches)
+        if is_precomputed:
+            c = self.conditioner.forward_precomputed(patches)
+        else:
+            c = self.conditioner(patches)
         
-        # Sample x_0 from ZINB prior
-        x_0 = self.prior.sample(batch_size).to(self.device)
+        # Sample x_0 from dynamically conditioned ZINB prior
+        x_0 = self.prior.sample(c).to(self.device)
         
         # ODE wrapper
         class ODEWrapper(nn.Module):

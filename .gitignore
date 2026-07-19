@@ -1,8 +1,14 @@
+# Ignore Python virtual environments
+venv/
 .venv/
-data/
 __pycache__/
-*.h5ad
+*.pyc
 
+# Ignore massive datasets
+data/
+
+# Ignore massive model checkpoints
 checkpoints/
 
-checkpoints/
+# Ignore OS files
+.DS_Store
