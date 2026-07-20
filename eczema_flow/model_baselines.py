@@ -9,7 +9,16 @@ class CNNRegressor(nn.Module):
     """
     def __init__(self, num_genes=500, cond_dim=256):
         super().__init__()
-        self.encoder = MorphologyEncoder(embed_dim=cond_dim)
+        import torchvision.models as models
+        # Use ResNet50 for true CNN baseline
+        self.cnn = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # Freeze CNN backbone
+        for param in self.cnn.parameters():
+            param.requires_grad = False
+            
+        in_features = self.cnn.fc.in_features
+        self.cnn.fc = nn.Linear(in_features, cond_dim)
+        
         # Directly regress the gene expression values
         self.regressor = nn.Sequential(
             nn.Linear(cond_dim, 512),
@@ -21,9 +30,9 @@ class CNNRegressor(nn.Module):
         b, n, c, h, w = patches.shape
         # Flatten and extract features
         patches_flat = patches.view(b * n, c, h, w)
-        features = self.encoder(patches_flat) # (b*n, cond_dim)
+        features = self.cnn(patches_flat) # (b*n, cond_dim)
         
-        # Aggregate features across the n patches (mean pooling instead of ViT Contextual Encoder)
+        # Aggregate features across the n patches (mean pooling)
         features = features.view(b, n, -1).mean(dim=1)
         
         # Regress
@@ -40,6 +49,8 @@ class GaussianPrior(nn.Module):
         self.device = device
         
     def sample(self, batch_size):
+        if isinstance(batch_size, torch.Tensor):
+            batch_size = batch_size.shape[0]
         return torch.randn(batch_size, self.num_genes, device=self.device)
 
 class Hist2STBaseline(nn.Module):

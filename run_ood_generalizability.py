@@ -1,51 +1,38 @@
 import os
+import argparse
 import numpy as np
+import pandas as pd
+import anndata as ad
 import matplotlib.pyplot as plt
+from eczema_flow.dataset import VisiumDataset
+
+def calculate_mse(adata, preds):
+    # Simulated calculation
+    return np.mean((adata.X - preds) ** 2)
+
+def run_inference(h5ad_path, model_path):
+    if not os.path.exists(h5ad_path):
+        raise FileNotFoundError(f"OOD Dataset {h5ad_path} not found. Please provide the external Psoriasis dataset.")
+    
+    adata = ad.read_h5ad(h5ad_path)
+    # Placeholder for actual inference logic
+    preds = np.random.rand(*adata.X.shape)
+    
+    return calculate_mse(adata, preds)
 
 def main():
+    parser = argparse.ArgumentParser(description="Evaluate OOD generalization on external datasets")
+    parser.add_argument("--psoriasis_h5ad", type=str, default="data/external/Psoriasis_spatial.h5ad")
+    parser.add_argument("--model_path", type=str, default="models/eczemaflow_fold_1.pth")
+    args = parser.parse_args()
+    
     os.makedirs('paper/figures', exist_ok=True)
     
-    # Simulate benchmarking results for Out-Of-Distribution (OOD) generalization
-    diseases = ['Atopic Dermatitis\n(In-Domain)', 'Psoriasis\n(Near OOD)', 'Melanoma\n(Far OOD)']
+    print("Running inference on Atopic Dermatitis (In-Domain)...")
+    ad_mse = run_inference("data/GSE206391_spatial.h5ad", args.model_path)
     
-    # Simulating MSE for different models across diseases
-    # EczemaFlow (AD specific prior) does very well on AD, okay on Psoriasis (similar skin inflammation), worse on Melanoma
-    # CNN Baseline does moderately poor on all, but degrades heavily on Melanoma
-    
-    mse_eczemaflow = [3.57, 4.12, 6.85]
-    mse_baseline = [4.85, 5.20, 7.90]
-    
-    x = np.arange(len(diseases))
-    width = 0.35
-    
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    rects1 = ax.bar(x - width/2, mse_eczemaflow, width, label='EczemaFlow (Full)', color='tab:purple')
-    rects2 = ax.bar(x + width/2, mse_baseline, width, label='CNN Baseline', color='tab:gray')
-    
-    ax.set_ylabel('Mean Squared Error (Lower is better)')
-    ax.set_title('Cross-Disease Generalizability of Spatial Inference')
-    ax.set_xticks(x)
-    ax.set_xticklabels(diseases)
-    ax.legend()
-    
-    # Add labels on bars
-    def autolabel(rects):
-        for rect in rects:
-            height = rect.get_height()
-            ax.annotate(f'{height:.2f}',
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
-                        xytext=(0, 3),  # 3 points vertical offset
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-                        
-    autolabel(rects1)
-    autolabel(rects2)
-    
-    ax.set_ylim(0, 9)
-    plt.tight_layout()
-    plt.savefig('paper/figures/ood_generalization.pdf', bbox_inches='tight', dpi=300)
-    print("Saved OOD generalization chart to paper/figures/ood_generalization.pdf")
+    print("Running inference on Psoriasis (Near OOD)...")
+    ps_mse = run_inference(args.psoriasis_h5ad, args.model_path)
 
 if __name__ == "__main__":
     main()

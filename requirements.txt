@@ -7,3 +7,5 @@ anndata>=0.8.0
 tqdm>=4.65.0
 matplotlib>=3.7.0
 scipy>=1.10.0
+stardist>=0.8.3
+csbdeep>=0.7.2

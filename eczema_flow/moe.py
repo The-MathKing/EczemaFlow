@@ -107,3 +107,27 @@ class MoEVectorField(nn.Module):
                     v_out[mask] += v_expert * expert_probs[mask]
                     
         return v_out
+
+    def compute_load_balancing_loss(self, c):
+        """
+        Computes the standard MoE load balancing loss to prevent expert collapse.
+        L = num_experts * sum(f_i * P_i)
+        where f_i is the fraction of tokens routed to expert i,
+        and P_i is the mean routing probability for expert i.
+        """
+        batch_size = c.size(0)
+        router_logits = self.router(c)
+        routing_probs = F.softmax(router_logits, dim=-1)
+        
+        P_i = routing_probs.mean(dim=0) # (num_experts,)
+        
+        _, top_k_indices = torch.topk(routing_probs, self.top_k, dim=-1)
+        
+        expert_counts = torch.zeros(self.num_experts, device=c.device)
+        ones = torch.ones_like(top_k_indices.view(-1), dtype=torch.float)
+        expert_counts.scatter_add_(0, top_k_indices.view(-1), ones)
+        
+        f_i = expert_counts / (batch_size * self.top_k)
+        
+        l_bal = self.num_experts * torch.sum(f_i * P_i)
+        return l_bal

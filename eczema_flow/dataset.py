@@ -4,9 +4,10 @@ import numpy as np
 import os
 import scanpy as sc
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageFile
 
 Image.MAX_IMAGE_PIXELS = None
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class VisiumDataset(Dataset):
     """
@@ -33,11 +34,15 @@ class VisiumDataset(Dataset):
         # 2. Parse patient-level fold assignments
         # Ensures that a patient's entire biological replicate set is kept in the same fold
         manifest = pd.read_csv(split_manifest)
-        fold_patients = manifest[manifest['fold_assignment'] == fold]['patient_id'].unique()
+        if isinstance(fold, list):
+            fold_patients = manifest[manifest['fold_assignment'].isin(fold)]['patient_id'].unique()
+        else:
+            fold_patients = manifest[manifest['fold_assignment'] == fold]['patient_id'].unique()
         
         # Filter to the requested fold's patients
         patient_col = 'patient_id' if 'patient_id' in self.adata.obs else 'patient'
-        self.adata = self.adata[self.adata.obs[patient_col].isin(fold_patients)].copy()
+        fold_patients_str = [str(p) for p in fold_patients]
+        self.adata = self.adata[self.adata.obs[patient_col].astype(str).isin(fold_patients_str)].copy()
         
         slide_col = 'slide_id' if 'slide_id' in self.adata.obs else 'sample'
         self.slides = self.adata.obs[slide_col].unique()

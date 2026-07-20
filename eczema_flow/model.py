@@ -71,8 +71,10 @@ class EczemaFlowModel(nn.Module):
         # 7. Predicted vector field v_theta
         v_theta = self.vector_field(t, x_t, c)
         
-        # 8. MSE Loss
-        loss = torch.mean((v_theta - u_t)**2)
+        # 8. MSE Loss + Load Balancing Loss
+        loss_fm = torch.mean((v_theta - u_t)**2)
+        loss_bal = self.vector_field.compute_load_balancing_loss(c)
+        loss = loss_fm + 0.01 * loss_bal
         
         return loss
 

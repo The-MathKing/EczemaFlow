@@ -21,14 +21,33 @@ class TDAFeatureExtractor(nn.Module):
         # Persim defaults to 20x20 images for Betti-1 (400 dims) + Betti-0 (400 dims) = 800
         self.projection = nn.Linear(800, output_dim)
         
-    def _extract_nuclei_points(self, patch_np, threshold=0.4):
-        """ Extract mock nuclei coordinates from a single patch using intensity thresholding. """
-        # patch_np: (C, H, W). Convert to grayscale.
-        gray = np.mean(patch_np, axis=0)
-        # Nuclei are typically dark (low intensity)
-        y, x = np.where(gray < threshold)
-        points = np.column_stack((x, y))
-        return points
+        try:
+            from stardist.models import StarDist2D
+            self.stardist_model = StarDist2D.from_pretrained('2D_versatile_he')
+        except ImportError:
+            self.stardist_model = None
+            print("Warning: stardist not installed. TDA extraction will fail.")
+        
+    def _extract_nuclei_points(self, patch_np):
+        """ Extract nuclei coordinates from a single patch using pre-trained StarDist2D. """
+        if self.stardist_model is None:
+            return np.zeros((0, 2))
+            
+        # Ensure patch is (H, W, C) for StarDist
+        if patch_np.shape[0] == 3:
+            patch_hwc = np.transpose(patch_np, (1, 2, 0))
+        else:
+            patch_hwc = patch_np
+            
+        try:
+            labels, details = self.stardist_model.predict_instances(patch_hwc)
+            points_yx = details['points']
+            if len(points_yx) == 0:
+                return np.zeros((0, 2))
+            # Return as (x, y)
+            return np.array([[p[1], p[0]] for p in points_yx])
+        except Exception:
+            return np.zeros((0, 2))
 
     def _compute_persistence_image(self, points):
         """ Compute Vietoris-Rips persistence diagram and convert to image. """
@@ -37,14 +56,16 @@ class TDAFeatureExtractor(nn.Module):
             
         try:
             diagrams = ripser(points, maxdim=1)['dgms']
-            # diagrams[0] is Betti-0, diagrams[1] is Betti-1
-            dgm0 = diagrams[0][:-1] # Remove the infinite point
+            dgm0 = diagrams[0][:-1]
             dgm1 = diagrams[1]
             
             img0 = self.pimgr.transform(dgm0) if len(dgm0) > 0 else np.zeros((20, 20))
             img1 = self.pimgr.transform(dgm1) if len(dgm1) > 0 else np.zeros((20, 20))
             
-            return np.concatenate([img0.flatten(), img1.flatten()])
+            res = np.concatenate([np.array(img0).flatten(), np.array(img1).flatten()])
+            if res.shape != (800,):
+                return np.zeros(800)
+            return res
         except Exception:
             return np.zeros(800)
 

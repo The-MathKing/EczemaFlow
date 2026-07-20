@@ -73,6 +73,14 @@ class DynamicZINBPrior(nn.Module):
         self.device = device
         self.proj = nn.Linear(cond_dim, num_genes * 3)
 
+    def fit_to_data(self, adata):
+        """
+        Dummy fit_to_data for interface compatibility. 
+        DynamicZINBPrior parameters are learned end-to-end conditioned on morphology,
+        so pre-fitting global parameters is not applicable.
+        """
+        pass
+
     def sample(self, c):
         batch_size = c.size(0)
         params = self.proj(c)

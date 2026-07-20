@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from eczema_flow.dataset import PrecomputedVisiumDataset
+from eczema_flow.dataset import VisiumDataset
 from eczema_flow.model import EczemaFlowModel
 from tqdm import tqdm
 import time
@@ -18,22 +18,23 @@ def main():
     num_genes = 500
     cond_dim = 256
     num_experts = 4
-    epochs = 500
+    epochs = 50
     
     device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     print(f"Using device: {device}")
     
-    # Data - load lightweight precomputed embeddings instead of raw images
-    print("Loading lightweight precomputed dataset...")
+    print("Loading actual VisiumDataset images and counts...")
     try:
-        train_dataset = PrecomputedVisiumDataset("data/precomputed/train_features.pt")
-        val_dataset = PrecomputedVisiumDataset("data/precomputed/test_features.pt")
+        import scanpy as sc
+        adata = sc.read_h5ad("data/GSE206391_spatial.h5ad")
+        train_folds = [f"fold_{i}" for i in range(1, 6)]
+        train_dataset = VisiumDataset("data", "data/splits.csv", fold=train_folds, num_genes=num_genes, adata=adata)
+        val_dataset = VisiumDataset("data", "data/splits.csv", fold="test", num_genes=num_genes, adata=adata)
         
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     except FileNotFoundError as e:
         print(f"Error: {e}")
-        print("Please run scripts/precompute_features.py first.")
         return
         
     print(f"Loaded {len(train_dataset)} training spots and {len(val_dataset)} validation spots.")
@@ -77,7 +78,7 @@ def main():
             counts = counts.to(device)
             
             optimizer.zero_grad()
-            loss = model.compute_loss(patches, counts, is_precomputed=True)
+            loss = model.compute_loss(patches, counts, is_precomputed=False)
             loss.backward()
             optimizer.step()
             
@@ -100,7 +101,7 @@ def main():
                         
                     patches = patches.to(device)
                     counts = counts.to(device)
-                    val_loss = model.compute_loss(patches, counts, is_precomputed=True)
+                    val_loss = model.compute_loss(patches, counts, is_precomputed=False)
                     total_val_loss += val_loss.item()
                     batches_evaluated += 1
                     

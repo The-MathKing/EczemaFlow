@@ -1,32 +1,30 @@
 import os
-import subprocess
 import json
+from PIL import Image
 
-img_dir = "data/images"
-scales = {}
+Image.MAX_IMAGE_PIXELS = None
 
-for f in os.listdir(img_dir):
-    if f.endswith("_HE.tif"):
-        img_path = os.path.join(img_dir, f)
-        
-        # Get original width
-        out = subprocess.check_output(["sips", "-g", "pixelWidth", img_path]).decode()
-        width = int(out.strip().split()[-1])
-        
-        out_h = subprocess.check_output(["sips", "-g", "pixelHeight", img_path]).decode()
-        height = int(out_h.strip().split()[-1])
-        
-        print(f"{f}: {width}x{height}")
-        
-        scale_x = 2000.0 / width
-        scale_y = 2000.0 / height
-        
-        # Resize to max 2000
-        subprocess.run(["sips", "-Z", "2000", img_path])
-        
-        scales[f.replace("_HE.tif", "")] = {"scale_x": scale_x, "scale_y": scale_y}
+data_dir = "data"
+scales_path = os.path.join(data_dir, "scales.json")
+with open(scales_path, "r") as f:
+    scales = json.load(f)
 
-with open("data/scales.json", "w") as f:
-    json.dump(scales, f)
-
-print("Done resizing!")
+for slide_id in ["P16357_1001", "P16357_1005", "P16357_1013", "P16357_1017", "P16357_1025", "P16357_1037"]:
+    img_path = os.path.join(data_dir, "images", f"{slide_id}_HE.tif")
+    if os.path.exists(img_path):
+        size_bytes = os.path.getsize(img_path)
+        if size_bytes > 5 * 1024 * 1024:  # If > 5MB, it's the raw image
+            print(f"Resizing {img_path} ({size_bytes/1024/1024:.1f} MB)...")
+            img = Image.open(img_path)
+            orig_w, orig_h = img.size
+            if slide_id in scales:
+                new_w = int(orig_w * scales[slide_id]["scale_x"])
+                new_h = int(orig_h * scales[slide_id]["scale_y"])
+            else:
+                new_w = 2000
+                new_h = 2000
+                
+            img_resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            img.close()
+            img_resized.save(img_path, format="JPEG") # Save as JPEG to match size
+            print(f"  -> Resized to {new_w}x{new_h}")
