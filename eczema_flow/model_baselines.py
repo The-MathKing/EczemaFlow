@@ -26,7 +26,14 @@ class CNNRegressor(nn.Module):
             nn.Linear(512, num_genes)
         )
 
-    def forward(self, patches):
+    def forward(self, patches, is_precomputed=False):
+        if is_precomputed:
+            b, n, d = patches.shape
+            # Precomputed features are [CNN(256), TDA(64)]. We only want CNN for this baseline.
+            features = patches[:, :, :256]
+            features = features.mean(dim=1)
+            return self.regressor(features)
+            
         b, n, c, h, w = patches.shape
         # Flatten and extract features
         patches_flat = patches.view(b * n, c, h, w)
@@ -69,11 +76,15 @@ class Hist2STBaseline(nn.Module):
             nn.Linear(512, num_genes)
         )
 
-    def forward(self, patches):
-        b, n, c, h, w = patches.shape
-        patches_flat = patches.view(b * n, c, h, w)
-        features = self.encoder(patches_flat) # (b*n, cond_dim)
-        features = features.view(b, n, -1)
+    def forward(self, patches, is_precomputed=False):
+        if is_precomputed:
+            b, n, d = patches.shape
+            features = patches[:, :, :256]
+        else:
+            b, n, c, h, w = patches.shape
+            patches_flat = patches.view(b * n, c, h, w)
+            features = self.encoder(patches_flat) # (b*n, cond_dim)
+            features = features.view(b, n, -1)
         
         # Spatial context via Transformer (proxy for spatial graphs in dense patches)
         features = self.transformer(features)

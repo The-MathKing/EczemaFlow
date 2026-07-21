@@ -3,29 +3,54 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from scipy.stats import pearsonr
 import scanpy as sc
+import json
 
 from eczema_flow.model import EczemaFlowModel
 from eczema_flow.model_baselines import CNNRegressor, Hist2STBaseline, GaussianPrior
-from eczema_flow.dataset import VisiumDataset
 
 # Ablation 1: No Context (Simple Mean Pooling instead of ViT+TDA)
 class EczemaFlowNoAttention(EczemaFlowModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from eczema_flow.attention import MorphologyEncoder
-        class MeanPoolConditioner(torch.nn.Module):
-            def __init__(self, embed_dim):
+        self.mean_pool_proj = torch.nn.Linear(320, kwargs.get('cond_dim', 256) + kwargs.get('tda_dim', 64))
+        
+    def compute_loss(self, patches, target_counts, is_precomputed=True):
+        batch_size = patches.size(0)
+        c = patches.mean(dim=1)
+        c = self.mean_pool_proj(c)
+        
+        x_1 = torch.log1p(target_counts).to(self.device)
+        x_0 = self.prior.sample(c).to(self.device)
+        t = torch.rand(batch_size, 1, device=self.device)
+        x_t = t * x_1 + (1 - t) * x_0
+        u_t = x_1 - x_0
+        v_theta = self.vector_field(t, x_t, c)
+        
+        loss_fm = torch.mean((v_theta - u_t)**2)
+        loss_bal = self.vector_field.compute_load_balancing_loss(c)
+        loss = loss_fm + 0.01 * loss_bal
+        return loss
+        
+    def sample(self, patches, num_steps=20, is_precomputed=True):
+        from torchdiffeq import odeint
+        c = patches.mean(dim=1)
+        c = self.mean_pool_proj(c)
+        x_0 = self.prior.sample(c).to(self.device)
+        class ODEWrapper(torch.nn.Module):
+            def __init__(self, vf, c):
                 super().__init__()
-                self.encoder = MorphologyEncoder(embed_dim=embed_dim)
-            def forward(self, patches):
-                b, n, c, h, w = patches.shape
-                patches_flat = patches.view(b * n, c, h, w)
-                features = self.encoder(patches_flat)
-                return features.view(b, n, -1).mean(dim=1)
-        self.conditioner = MeanPoolConditioner(embed_dim=kwargs.get('cond_dim', 256))
+                self.vf = vf
+                self.c = c
+            def forward(self, t, x):
+                return self.vf(t, x, self.c)
+        ode_func = ODEWrapper(self.vector_field, c)
+        t_span = torch.linspace(0, 1, num_steps, device=self.device)
+        with torch.no_grad():
+            trajectory = odeint(ode_func, x_0, t_span, method='euler')
+        return trajectory[-1]
 
 # Ablation 2: Gaussian Flow Model
 class GaussianFlowModel(EczemaFlowModel):
@@ -46,7 +71,31 @@ def compute_mmd(x, y, sigma=1.0):
     K_xy = torch.exp(- (rx.t() + ry - 2*xy) / (2*sigma**2))
     return (K_xx.mean() + K_yy.mean() - 2*K_xy.mean()).item()
 
-def train_and_eval_loocv(model_name, model_class, kwargs, adata, num_genes, device, epochs=1, is_cnn=False):
+class PrecomputedFoldDataset(Dataset):
+    def __init__(self, folds):
+        all_feats = []
+        all_counts = []
+        all_coords = []
+        for fold in folds:
+            path = f"data/precomputed/{fold}_features.pt"
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Missing precomputed file: {path}")
+            data = torch.load(path, map_location='cpu', weights_only=True)
+            all_feats.append(data['features'])
+            all_counts.append(data['counts'])
+            all_coords.append(data['coords'])
+            
+        self.features = torch.cat(all_feats, dim=0)
+        self.counts = torch.cat(all_counts, dim=0)
+        self.coords = torch.cat(all_coords, dim=0)
+        
+    def __len__(self):
+        return len(self.features)
+        
+    def __getitem__(self, idx):
+        return self.features[idx], self.counts[idx], self.coords[idx]
+
+def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_cnn=False):
     print(f"\n--- Starting 6-Fold LOOCV for {model_name} ---")
     all_preds = []
     all_targets = []
@@ -62,60 +111,50 @@ def train_and_eval_loocv(model_name, model_class, kwargs, adata, num_genes, devi
         all_preds = []
         all_targets = []
         
-        train_dataset = VisiumDataset(data_path="data", split_manifest="data/splits.csv", fold=train_folds, num_genes=num_genes, adata=adata)
-        val_dataset = VisiumDataset(data_path="data", split_manifest="data/splits.csv", fold=[val_fold], num_genes=num_genes, adata=adata)
+        train_dataset = PrecomputedFoldDataset(train_folds)
+        val_dataset = PrecomputedFoldDataset([val_fold])
         
-        train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, drop_last=True)
-        val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
-        
-        import gc
-        gc.collect()
+        # Batch size 256 speeds through training on CPU!
+        train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False)
         
         model = model_class(**kwargs).to(device)
-        
-        if hasattr(model, 'prior') and hasattr(model.prior, 'fit_to_data'):
-            model.prior.fit_to_data(train_dataset.adata)
             
         optimizer = optim.AdamW(model.parameters(), lr=2e-3)
         model.train()
         
         print(f"Training {model_name} on {val_fold} (held out)...")
         for epoch in range(epochs):
-            for i, (patches, counts, coords) in enumerate(train_loader):
+            for patches, b_counts, b_coords in train_loader:
                 patches = patches.to(device)
-                counts = counts.to(device)
+                b_counts = b_counts[:, :500].to(device)
                 
                 optimizer.zero_grad()
                 if is_cnn:
-                    preds = model(patches)
-                    target_log = torch.log1p(counts)
+                    preds = model(patches, is_precomputed=True)
+                    target_log = torch.log1p(b_counts)
                     loss = F.mse_loss(preds, target_log)
                 else:
-                    loss = model.compute_loss(patches, counts)
+                    loss = model.compute_loss(patches, b_counts, is_precomputed=True)
                 loss.backward()
                 optimizer.step()
                 
         model.eval()
         with torch.no_grad():
-            for i, (patches, counts, coords) in enumerate(val_loader):
+            for patches, b_counts, b_coords in val_loader:
                 patches = patches.to(device)
-                counts = counts.to(device)
+                b_counts = b_counts[:, :500].to(device)
                 
-                target_log = torch.log1p(counts)
+                target_log = torch.log1p(b_counts)
                 if is_cnn:
-                    preds = model(patches)
+                    preds = model(patches, is_precomputed=True)
                 else:
-                    preds = model.sample(patches, num_steps=20)
+                    preds = model.sample(patches, num_steps=20, is_precomputed=True)
                     
                 all_preds.append(preds.cpu().numpy())
                 all_targets.append(target_log.cpu().numpy())
-                all_coords.append(coords.cpu().numpy())
+                all_coords.append(b_coords.cpu().numpy())
                 
-            del model
-            del optimizer
-            gc.collect()
-            
-        # Calculate per-fold metrics
         if len(all_preds) > 0:
             f_preds = np.concatenate(all_preds, axis=0)
             f_targets = np.concatenate(all_targets, axis=0)
@@ -131,7 +170,6 @@ def train_and_eval_loocv(model_name, model_class, kwargs, adata, num_genes, devi
             fold_pccs.append(np.mean(f_pcc_list) if f_pcc_list else 0.0)
             fold_mmds.append(compute_mmd(torch.tensor(f_preds), torch.tensor(f_targets)))
             
-            # Save predictions for this fold
             os.makedirs("results", exist_ok=True)
             np.save(f"results/{model_name.replace(' ', '_')}_{val_fold}_preds.npy", f_preds)
             np.save(f"results/{model_name.replace(' ', '_')}_{val_fold}_targets.npy", f_targets)
@@ -146,7 +184,6 @@ def train_and_eval_loocv(model_name, model_class, kwargs, adata, num_genes, devi
     mmd = float(np.mean(fold_mmds))
     mmd_std = float(np.std(fold_mmds))
     
-    # 95% Confidence Interval (approx)
     mse_ci = 1.96 * mse_std / np.sqrt(len(fold_mses))
     pcc_ci = 1.96 * pcc_std / np.sqrt(len(fold_pccs))
     
@@ -156,33 +193,31 @@ def train_and_eval_loocv(model_name, model_class, kwargs, adata, num_genes, devi
             "MMD": mmd, "MMD_std": mmd_std}
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
-    print(f"Executing traceable empirical run on {device}...")
+    # Force 8-core CPU execution for instantaneous LOOCV benchmarks!
+    device = torch.device('cpu')
+    torch.set_num_threads(8)
+    print(f"Executing PRECOMPUTED 8-CORE CPU empirical run on {device}...")
     
     num_genes = 500
     epochs = 50
     
-    print("Loading transcriptomic data matrix...")
-    adata = sc.read_h5ad("data/GSE206391_spatial.h5ad")
-    
     results = {}
     
     cnn_kwargs = {'num_genes': num_genes}
-    results['CNN Regressor'] = train_and_eval_loocv("CNN Regressor", CNNRegressor, cnn_kwargs, adata, num_genes, device, epochs, is_cnn=True)
+    results['CNN Regressor'] = train_and_eval_loocv("CNN Regressor", CNNRegressor, cnn_kwargs, device, epochs, is_cnn=True)
     
     hist2st_kwargs = {'num_genes': num_genes}
-    results['Hist2ST'] = train_and_eval_loocv("Hist2ST", Hist2STBaseline, hist2st_kwargs, adata, num_genes, device, epochs, is_cnn=True)
+    results['Hist2ST'] = train_and_eval_loocv("Hist2ST", Hist2STBaseline, hist2st_kwargs, device, epochs, is_cnn=True)
     
     gf_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['Gaussian Flow'] = train_and_eval_loocv("Gaussian Flow", GaussianFlowModel, gf_kwargs, adata, num_genes, device, epochs)
+    results['Gaussian Flow'] = train_and_eval_loocv("Gaussian Flow", GaussianFlowModel, gf_kwargs, device, epochs)
     
     na_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['No Context Flow'] = train_and_eval_loocv("No Context Flow", EczemaFlowNoAttention, na_kwargs, adata, num_genes, device, epochs)
+    results['No Context Flow'] = train_and_eval_loocv("No Context Flow", EczemaFlowNoAttention, na_kwargs, device, epochs)
     
     full_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['EczemaFlow (Full)'] = train_and_eval_loocv("EczemaFlow", EczemaFlowModel, full_kwargs, adata, num_genes, device, epochs)
+    results['EczemaFlow (Full)'] = train_and_eval_loocv("EczemaFlow", EczemaFlowModel, full_kwargs, device, epochs)
     
-    import json
     with open("results/metrics.json", "w") as f:
         json.dump(results, f, indent=4)
     print("Traceable prediction run complete! Results saved to results/metrics.json")
