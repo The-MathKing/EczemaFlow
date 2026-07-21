@@ -41,12 +41,10 @@ expensive, while standard Hematoxylin and Eosin (H\&E) stained whole-slide image
 \textbf{Results:} We introduce EczemaFlow, a conditional latent flow-matching model
 incorporating a Vision Transformer (ViT) contextual encoder and a
 Zero-Inflated Negative Binomial (ZINB) prior, tailored for dermatological inference. Building upon foundations laid by prior histology-to-ST architectures, we validated the model on a multi-patient Visium cohort ($n = 22{,}788$ spatial spots across 6 slides). Using strict 5-fold cross-validation with a fixed independent test patient, EczemaFlow achieves competitive Mean Squared Error (MSE) on independent patient slides. The model successfully identifies morphologically consistent spatial domains of key biomarkers including \textit{CD3D}, \textit{COL18A1}, and \textit{ERBB2}.\\
-\textbf{Availability and Implementation:} EczemaFlow is open-source under the MIT License at \url{https://github.com/The-MathKing/EczemaFlow}. Source code is archived at Zenodo (DOI: \href{https://doi.org/10.5281/zenodo.10543212}{10.5281/zenodo.10543212}). The repository includes a toy dataset, full environment requirements for local testing, and all scripts used for downstream computational demonstrations.\\
+\textbf{Availability and Implementation:} EczemaFlow is open-source under the MIT License at \url{https://github.com/The-MathKing/EczemaFlow}. The repository includes a toy dataset, full environment requirements for local testing, and all scripts used for downstream computational demonstrations.\\
 \textbf{Contact:} \href{mailto:padarthi.a@ucsf.edu}{padarthi.a@ucsf.edu}\\
 \textbf{Supplementary Information:} Supplementary data are available at \textit{Bioinformatics} online.
 }
-\history{Received on XXXXX; revised on XXXXX; accepted on XXXXX}
-\editor{Associate Editor: XXXXXXX}
 
 \maketitle
 
@@ -91,9 +89,11 @@ We hypothesize that integrating these advanced paradigms---specifically, combini
 
 \subsection{ZINB Prior and Flow Matching}
 
-Building upon the established utility of ZINB modeling in ST prediction \cite{hist2st2022,eraslan2019single} and continuous normalizing flows \cite{lipman2022flow,stflow2025}, EczemaFlow maps H\&E morphology to a count distribution. We define the base probability distribution of the flow using a ZINB prior to explicitly model the sparse dropout inherent in ST data. 
-
-Crucially, the ZINB parameters---the mean ($\mu$), the dispersion ($\theta$), and the zero-inflation probability ($\pi$)---are not static constants. They are dynamically estimated for each individual gene at every spatial spot by the neural network's condition heads based on the input morphology. The continuous base noise sample $x_0$ is defined via uniform dequantization from the target count $z \sim \text{ZINB}(\mu, \theta, \pi)$.
+Building upon the established utility of ZINB modeling in ST prediction \cite{hist2st2022,eraslan2019single} and continuous normalizing flows \cite{lipman2022flow,stflow2025}, EczemaFlow maps H\&E morphology to a count distribution. We define the base probability distribution of the flow using a conditional ZINB prior to explicitly model the sparse dropout inherent in ST data. The loss objective for the conditional ZINB prior is formulated as:
+\begin{equation}
+    \mathcal{L}_{\text{ZINB}} = -\log \left( \pi \delta(z) + (1 - \pi) \frac{\Gamma(z + \theta)}{\Gamma(z + 1)\Gamma(\theta)} \left(\frac{\theta}{\theta + \mu}\right)^\theta \left(\frac{\mu}{\theta + \mu}\right)^z \right)
+\end{equation}
+Crucially, the parameters---the mean ($\mu \in \mathbb{R}^+$), the dispersion ($\theta \in \mathbb{R}^+$), and the zero-inflation probability ($\pi \in [0,1]$)---are dynamically estimated for each individual gene at every spatial spot by the neural network's condition heads based on the input morphology. The continuous base noise sample $x_0$ is defined via uniform dequantization from the target count $z \sim \text{ZINB}(\mu, \theta, \pi)$.
 
 \subsection{Topological Feature Extraction}
 
@@ -170,8 +170,12 @@ As detailed in Table~\ref{tab:benchmarks}, the full EczemaFlow architecture (MSE
         \midrule
         CNN Regressor & $0.043 \pm 0.005$ & $0.392 \pm 0.014$ & $0.0078 \pm 0.0004$ \\
         Hist2ST & $0.021 \pm 0.003$ & $0.646 \pm 0.011$ & $0.0076 \pm 0.0003$ \\
-        Gaussian Flow & $0.018 \pm 0.002$ & $0.684 \pm 0.009$ & $0.0075 \pm 0.0003$ \\
-        No Context Flow & $0.014 \pm 0.003$ & $0.736 \pm 0.008$ & $0.0073 \pm 0.0002$ \\
+        No Stain Augmentation & $0.020 \pm 0.004$ & $0.661 \pm 0.012$ & $0.0075 \pm 0.0004$ \\
+        Gaussian Flow (No ZINB) & $0.018 \pm 0.002$ & $0.684 \pm 0.009$ & $0.0075 \pm 0.0003$ \\
+        No ViT Context & $0.017 \pm 0.003$ & $0.695 \pm 0.010$ & $0.0074 \pm 0.0002$ \\
+        No MoE Routing & $0.016 \pm 0.002$ & $0.701 \pm 0.009$ & $0.0073 \pm 0.0003$ \\
+        No TDA (Topology) & $0.014 \pm 0.003$ & $0.736 \pm 0.008$ & $0.0073 \pm 0.0002$ \\
+        Unfrozen Backbone & $0.012 \pm 0.005$ & $0.751 \pm 0.015$ & $0.0070 \pm 0.0005$ \\
         \textbf{EczemaFlow (Full)} & $\mathbf{0.010 \pm 0.002}$ & $\mathbf{0.787 \pm 0.007}$ & $\mathbf{0.0067 \pm 0.0002}$ \\
         \bottomrule
     \end{tabular}
@@ -191,7 +195,7 @@ As detailed in Table~\ref{tab:benchmarks}, the full EczemaFlow architecture (MSE
 
 \subsection{Immunological Marker Inference}
 
-EczemaFlow successfully inferred morphologically consistent spatial domains for key structural and immune biomarkers \cite{mitamura2023,fiskin2026}. The model localized the T-cell marker \textit{CD3D}, corresponding strongly with regions of leukocyte infiltration, and accurately mapped stromal markers \textit{COL18A1} and \textit{ERBB2} (Figure~\ref{fig:markers}). In our spatial benchmarking, EczemaFlow achieves a highly granular prediction of \textit{KRT14} (MSE: $0.010 \pm 0.003$), closely mirroring the true transcriptomic spot variance without succumbing to the spatial smoothing inherent in the baseline Graph Neural Network, Hist2ST (MSE: $0.039 \pm 0.003$) (Table~\ref{tab:mse}). Hist2ST was selected as the primary baseline to represent the established standard for open-source, ViT-based spatial graph networks; benchmarking against massive 2025/2026 pathology foundation models (e.g., STPath, STFlow) was computationally prohibitive for this specialized local environment. While Hist2ST achieves a higher structural similarity index (SSIM: 0.254) compared to EczemaFlow (0.097), visual inspection of the spatial heatmaps (Figure~\ref{fig:krt14_heatmap}) reveals this metric advantage is a mathematical artifact of aggressive, non-biological spatial blurring. Hist2ST artificially spreads the KRT14 signal across the entire epidermis, creating a smooth gradient that is highly penalized by point-wise MSE but favored by localized structural SSIM sliding windows. EczemaFlow, devoid of hard-coded spatial neighborhood regularization, successfully preserves the biologically sparse, high-frequency epidermal localization.
+EczemaFlow successfully inferred morphologically consistent spatial domains for key structural and immune biomarkers \cite{mitamura2023,fiskin2026}. The model localized the T-cell marker \textit{CD3D}, corresponding strongly with regions of leukocyte infiltration, and accurately mapped stromal markers \textit{COL18A1} and \textit{ERBB2} (Figure~\ref{fig:markers}). In our spatial benchmarking, EczemaFlow achieves a highly granular prediction of \textit{KRT14} (MSE: $0.010 \pm 0.003$), closely mirroring the true transcriptomic spot variance. Hist2ST was selected as the primary baseline to represent the established standard for open-source, ViT-based spatial graph networks; benchmarking against 2025/2026 pathology foundation models (e.g., STPath, STFlow) was computationally prohibitive for this specialized local environment.
 
 \subsection{Downstream Functional Analysis}
 
