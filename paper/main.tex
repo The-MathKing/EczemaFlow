@@ -65,7 +65,7 @@ Predicting high-order spatial transcriptomics directly from inexpensive Hematoxy
 
 Despite this rapid progress, comprehensive benchmarking \cite{wang2025benchmark} demonstrates that histology-to-ST prediction remains a deeply challenging task. No single method perfectly recovers the full transcriptome; average performance across all genes is generally modest. The inherent stochasticity of gene expression, the sparse nature of sequencing dropout, and the extreme spatial sparsity of disease-driving cytokines (like \textit{IL13} in AD) make inference highly variable \cite{schabitz2022,wang2025benchmark}.
 
-We hypothesize that integrating these advanced paradigms---specifically, combining a ViT contextual encoder with a generative flow-matching backend \cite{lipman2022flow} governed by a ZINB prior---can yield a strong, specialized proof-of-concept for Atopic Dermatitis. By focusing strictly on AD biology rather than generic pan-organ prediction, EczemaFlow aims to robustly infer spatially structured immune-stromal interactions from dermatological H\&E slides.
+We hypothesize that integrating these advanced paradigms---specifically, combining a ViT contextual encoder with a generative flow-matching backend \cite{lipman2022flow} governed by a ZINB prior---can yield a strong, specialized proof-of-concept for mixed inflammatory skin diseases. By focusing strictly on complex dermatological biology rather than generic pan-organ prediction, EczemaFlow aims to robustly infer spatially structured immune-stromal interactions from H\&E slides.
 
 \section{System and Methods}
 
@@ -94,6 +94,7 @@ We hypothesize that integrating these advanced paradigms---specifically, combini
 
 Building upon the established utility of ZINB modeling in ST prediction \cite{hist2st2022,eraslan2019single} and continuous normalizing flows \cite{lipman2022flow,stflow2025}, EczemaFlow maps H\&E morphology to a count distribution. We define the base probability distribution of the flow using a conditional ZINB prior to explicitly model the sparse dropout inherent in ST data. The loss objective for the conditional ZINB prior is formulated as:
 \begin{equation}
+\label{eq:zinb}
     \mathcal{L}_{\text{ZINB}} = -\log \left( \pi \delta(z) + (1 - \pi) \frac{\Gamma(z + \theta)}{\Gamma(z + 1)\Gamma(\theta)} \left(\frac{\theta}{\theta + \mu}\right)^\theta \left(\frac{\mu}{\theta + \mu}\right)^z \right)
 \end{equation}
 Crucially, the parameters---the mean ($\mu \in \mathbb{R}^+$), the dispersion ($\theta \in \mathbb{R}^+$), and the zero-inflation probability ($\pi \in [0,1]$)---are dynamically estimated for each individual gene at every spatial spot by the neural network's condition heads based on the input morphology. The continuous base noise sample $x_0$ is defined via uniform dequantization from the target count $z \sim \text{ZINB}(\mu, \theta, \pi)$.
@@ -226,18 +227,7 @@ Furthermore, translating EczemaFlow to a true clinical setting will require over
 
 Biologically, our spatial inferences open a new horizon for non-destructive pathology. By suggesting the potential to map the colocalization of T-cell infiltrates (e.g., \textit{CD3D}) with activated fibroblast networks (e.g., \textit{COL18A1}) directly from routine H\&E, this approach may ultimately enable researchers to retroactively analyze legacy clinical trials to uncover spatially-driven resistance mechanisms without incurring prohibitive sequencing costs. Finally, while flow matching elegantly models multimodal distributions, and our MMD evaluation provides initial evidence of generative calibration, extensive uncertainty-error analyses and evaluating higher-order multicellular interactions remain objectives for future work.
 
-\subsection{Cross-Disease Generalizability}
-To ascertain whether EczemaFlow models fundamental skin biology or merely overfits to AD-specific artifacts, we evaluated the pre-trained model on an out-of-distribution (OOD) cohort: Psoriasis (GSE206391, $n=3$ slides, near-OOD inflammatory skin disease). The Psoriasis dataset used the 10x Visium platform with equivalent log1p preprocessing and intersection over 500 equivalent gene markers. As shown in Figure~\ref{fig:ood}, EczemaFlow retains a significant advantage over generic baseline architectures on Psoriasis, suggesting the model successfully captures generalized inflammatory skin architecture. We acknowledge that the Psoriasis data, drawn from the same GSE206391 study, shares laboratory batch effects and is thus a near-domain transfer rather than fully external validation.
-
-\begin{figure}[t!]
-    \centering
-    \includegraphics[width=\linewidth]{figures/ood_generalization.pdf}
-    \caption{Cross-disease generalizability. The model demonstrates robust zero-shot inference on near-OOD Psoriasis data, validating its specialization in inflammatory dermatoses.}
-    \label{fig:ood}
-\end{figure}
-
-
-Future iterations must undergo robust cross-cohort validation against established pan-organ architectures (e.g., Hist2ST \cite{hist2st2022}, STPath \cite{stpath2025}). Nevertheless, EczemaFlow provides a scientifically coherent computational baseline for applying generative spatial AI specifically to the complex microenvironment of Atopic Dermatitis.
+Future iterations must undergo robust cross-cohort validation against established pan-organ architectures (e.g., Hist2ST \cite{hist2st2022}, STPath \cite{stpath2025}). Nevertheless, EczemaFlow provides a scientifically coherent computational baseline for applying generative spatial AI specifically to the complex microenvironment of inflammatory skin diseases.
 
 % ---------------------------------------------------------------------------
 % Declarations section
