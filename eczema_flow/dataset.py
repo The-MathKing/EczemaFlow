@@ -5,6 +5,7 @@ import os
 import scanpy as sc
 import pandas as pd
 from PIL import Image, ImageFile
+import torchvision.transforms.v2 as v2
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -25,6 +26,22 @@ class VisiumDataset(Dataset):
         self.fold = fold
         self.patch_size = patch_size
         self.num_genes = num_genes
+        
+        # Define heavy spatial and color augmentations for training
+        self.transform = v2.Compose([
+            v2.ToImage(),
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.5),
+            v2.RandomRotation(degrees=90),
+            v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ]) if 'train' in fold or fold.startswith('fold') else v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        
         h5ad_path = os.path.join(data_path, "GSE206391", "GSE206391_Preprocessed_data.h5")
         if adata is not None:
             self.adata = adata
