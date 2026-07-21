@@ -16,9 +16,9 @@ def generate_benchmark_chart():
     os.makedirs('paper/figures', exist_ok=True)
     labels = list(results.keys())
     
-    mses = [res[0] for res in results.values()]
-    pccs = [res[1] for res in results.values()]
-    mmds = [res[2] for res in results.values()]
+    mses = [res["MSE"] for res in results.values()]
+    pccs = [res["PCC"] for res in results.values()]
+    mmds = [res.get("MMD", 0.0) for res in results.values()]
     
     x = np.arange(len(labels))
     width = 0.5
