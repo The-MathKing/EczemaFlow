@@ -135,8 +135,11 @@ class VisiumDataset(Dataset):
         else:
             patch = Image.new('RGB', (self.patch_size, self.patch_size))
             
-        # 4. Convert patch to normalized tensor
-        patch_tensor = torch.from_numpy(np.array(patch)).permute(2, 0, 1).float() / 255.0
+        # 4. Apply Stain Augmentation and convert to normalized tensor
+        if hasattr(self, 'transform') and self.transform is not None:
+            patch_tensor = self.transform(patch)
+        else:
+            patch_tensor = torch.from_numpy(np.array(patch)).permute(2, 0, 1).float() / 255.0
         
         # Expand to num_patches dimension (e.g. 4 patches per spot for ViT)
         # In a full pipeline, we would extract 4 adjacent tiles
