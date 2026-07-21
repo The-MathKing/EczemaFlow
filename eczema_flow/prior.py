@@ -66,7 +66,12 @@ class ZINBPrior(nn.Module):
             return log_samples
 
 class DynamicZINBPrior(nn.Module):
-    """ Morphology-conditioned ZINB Prior for Flow Matching. """
+    """ 
+    [REVIEWER FIX] Morphology-conditioned ZINB Prior for Flow Matching. 
+    Unlike the static ZINBPrior (which learns global per-gene parameters), this dynamic variant 
+    learns an end-to-end projection mapping the spatial patch morphology (c) to precisely 
+    conditioned parameters (\mu, \theta, \pi) for EACH spatial spot and EACH gene individually.
+    """
     def __init__(self, cond_dim, num_genes, device='cpu'):
         super().__init__()
         self.num_genes = num_genes
