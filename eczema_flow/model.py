@@ -81,7 +81,15 @@ class EczemaFlowModel(nn.Module):
         # to strictly penalize expert collapse and enforce homogeneous routing distribution.
         loss_fm = torch.mean((v_theta - u_t)**2)
         loss_bal = self.vector_field.compute_load_balancing_loss(c)
-        loss = loss_fm + 0.01 * loss_bal
+        
+        # 9. ZINB Prior Loss
+        # The dynamic ZINB prior must be trained end-to-end to maximize likelihood of empirical counts
+        if hasattr(self.prior, 'compute_zinb_loss'):
+            loss_zinb = self.prior.compute_zinb_loss(c, target_counts)
+        else:
+            loss_zinb = 0.0
+            
+        loss = loss_fm + 0.01 * loss_bal + 0.1 * loss_zinb
         
         return loss
 

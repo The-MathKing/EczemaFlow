@@ -86,6 +86,39 @@ class DynamicZINBPrior(nn.Module):
         """
         pass
 
+    def compute_zinb_loss(self, c, target_counts):
+        """
+        Compute the ZINB negative log likelihood loss.
+        """
+        params = self.proj(c)
+        log_r = params[:, :self.num_genes]
+        logit_p = params[:, self.num_genes:2*self.num_genes]
+        logit_pi = params[:, 2*self.num_genes:]
+        
+        # Safely compute parameters
+        r = torch.exp(torch.clamp(log_r, -10, 5))
+        
+        import torch.nn.functional as F
+        from torch.distributions import NegativeBinomial
+        
+        # Target counts in this dataset are preprocessed with CP10K and log1p.
+        # We must convert them back to approximate integer pseudo-counts for the ZINB NLL.
+        pseudo_counts = torch.expm1(target_counts).round().clamp(min=0)
+        
+        # NegativeBinomial in PyTorch has mean = total_count * probs / (1-probs)
+        # We want mean = r * (1-p) / p, so we use logits = -logit_p
+        nb = NegativeBinomial(total_count=r, logits=-logit_p)
+        nb_log_prob = nb.log_prob(pseudo_counts)
+        
+        log_pi = -F.softplus(-logit_pi)
+        log_1_pi = -F.softplus(logit_pi)
+        
+        zero_case = torch.logaddexp(log_pi, log_1_pi + nb_log_prob)
+        non_zero_case = log_1_pi + nb_log_prob
+        
+        log_prob = torch.where(pseudo_counts < 1e-6, zero_case, non_zero_case)
+        return -torch.mean(log_prob)
+
     def sample(self, c):
         batch_size = c.size(0)
         params = self.proj(c)
