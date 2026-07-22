@@ -11,7 +11,7 @@ class EczemaFlowModel(nn.Module):
     - MoE Vector Field
     - Dynamic ZINB Prior integration
     """
-    def __init__(self, num_genes=500, cond_dim=256, tda_dim=64, num_experts=4, device='cpu'):
+    def __init__(self, num_genes=500, cond_dim=256, tda_dim=256, num_experts=4, device='cpu'):
         super().__init__()
         self.device = device
         self.conditioner = ConditioningNetwork(embed_dim=cond_dim, tda_dim=tda_dim)

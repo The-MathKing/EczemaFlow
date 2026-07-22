@@ -15,7 +15,7 @@ from eczema_flow.model_baselines import CNNRegressor, Hist2STBaseline, GaussianP
 class EczemaFlowNoAttention(EczemaFlowModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mean_pool_proj = torch.nn.Linear(320, kwargs.get('cond_dim', 256) + kwargs.get('tda_dim', 64))
+        self.mean_pool_proj = torch.nn.Linear(320, kwargs.get('cond_dim', 256) + kwargs.get('tda_dim', 256))
         
     def compute_loss(self, patches, target_counts, is_precomputed=True):
         batch_size = patches.size(0)

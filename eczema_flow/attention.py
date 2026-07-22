@@ -115,6 +115,21 @@ class ConditioningNetwork(nn.Module):
         dense embeddings (b, n, embed_dim + tda_dim) into the ViT.
         """
         b, n, d = combined_features.shape
+        
+        # Backward compatibility for precomputed features (which had tda_dim=64)
+        # If the model is instantiated with tda_dim=256 (d=512) but precomputed is 320
+        target_d = self.attention.embed_dim
+        if d < target_d:
+            cnn_feats = combined_features[:, :, :256]
+            tda_feats = combined_features[:, :, 256:]
+            
+            # Project the 64-dim TDA features to the new tda_dim to maintain dimensionality
+            if not hasattr(self, 'tda_adapter'):
+                self.tda_adapter = nn.Linear(tda_feats.shape[-1], target_d - 256).to(combined_features.device)
+            tda_feats = self.tda_adapter(tda_feats)
+            combined_features = torch.cat([cnn_feats, tda_feats], dim=-1)
+            d = target_d
+            
         combined_features_flat = combined_features.view(b * n, d)
         contextual_embeds = self.attention(combined_features_flat, num_patches_per_spot=n)
         return contextual_embeds
