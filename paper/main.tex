@@ -28,8 +28,8 @@
 \begin{document}
 \firstpage{1}
 
-\title[EczemaFlow]{EczemaFlow: A Generative Flow-Matching Model for Inferring Spatial Transcriptomics from Standard H\&E Histology in Mixed Inflammatory Skin Diseases}
-\author[Padarthi \textit{et~al.}]{Padarthi A.\,$^{\text{\sfb 1,}*}$, and Huynh R.\,$^{\text{\sfb 1}}$}
+\title[EczemaFlow]{EczemaFlow: A Generative Flow-Matching Model for Inferring Spatial Transcriptomics from Standard H\&E Histology in Atopic Dermatitis}
+\author[Padarthi \textit{et~al.}]{Padarthi A.\,$^{\text{\sfb 1,}*}$, Huynh R.\,$^{\text{\sfb 1}}$}
 \address{$^{\text{\sfb 1}}$Allen High School, Allen, TX 75002, USA.}
 \corresp{$^\ast$To whom correspondence should be addressed: padarthi.a@ucsf.edu}
 
@@ -65,7 +65,7 @@ Predicting high-order spatial transcriptomics directly from inexpensive Hematoxy
 
 Despite this rapid progress, comprehensive benchmarking \cite{wang2025benchmark} demonstrates that histology-to-ST prediction remains a deeply challenging task. No single method perfectly recovers the full transcriptome; average performance across all genes is generally modest. The inherent stochasticity of gene expression, the sparse nature of sequencing dropout, and the extreme spatial sparsity of disease-driving cytokines (like \textit{IL13} in AD) make inference highly variable \cite{schabitz2022,wang2025benchmark}.
 
-We hypothesize that integrating these advanced paradigms---specifically, combining a ViT contextual encoder with a generative flow-matching backend \cite{lipman2022flow} governed by a ZINB prior---can yield a strong, specialized proof-of-concept for mixed inflammatory skin diseases. By focusing strictly on complex dermatological biology rather than generic pan-organ prediction, EczemaFlow aims to robustly infer spatially structured immune-stromal interactions from H\&E slides.
+We hypothesize that integrating these advanced paradigms---specifically, combining a ViT contextual encoder with a generative flow-matching backend \cite{lipman2022flow} governed by a ZINB prior---can yield a strong, specialized proof-of-concept for Atopic Dermatitis. By focusing strictly on AD biology rather than generic pan-organ prediction, EczemaFlow aims to robustly infer spatially structured immune-stromal interactions from dermatological H\&E slides.
 
 \section{System and Methods}
 
@@ -78,11 +78,11 @@ We hypothesize that integrating these advanced paradigms---specifically, combini
         \toprule
         \textbf{Patient ID} & \textbf{GSM Accession} & \textbf{Slide ID} & \textbf{Condition} & \textbf{Fold} \\
         \midrule
-        Patient 1 & GSM6034131 & 1-V19523-003 & Psoriasis & 1 \\
+        Patient 1 & GSM6034131 & 1-V19523-003 & AD (Lesional / Non-lesional AD skin) & 1 \\
         Patient 2 & GSM6034132 & 2-V19S23-004 & AD (Lesional / Non-lesional AD skin) & 2 \\
-        Patient 3 & GSM6034133 & 3-V19S23-005 & Lichen Planus & 3 \\
+        Patient 3 & GSM6034133 & 3-V19S23-005 & AD (Lesional / Non-lesional AD skin) & 3 \\
         Patient 5 & GSM6034134 & 5-V19S18-093 & AD (Lesional / Non-lesional AD skin) & 4 \\
-        Patient 6 & GSM6034135 & 6-V19T12-047 & Lichen Planus & 5 \\
+        Patient 6 & GSM6034135 & 6-V19T12-047 & AD (Lesional / Non-lesional AD skin) & 5 \\
         Patient 8 & GSM6034136 & 8-V19T12-006 & AD (Lesional / Non-lesional AD skin) & Test \\
         \bottomrule
     \end{tabular}
