@@ -96,6 +96,17 @@ class SpatialFourierEncoder(nn.Module):
         out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
         return out
 
+class TDAGate(nn.Module):
+    def __init__(self, tda_dim):
+        super().__init__()
+        self.gate = nn.Sequential(
+            nn.Linear(tda_dim, tda_dim),
+            nn.LayerNorm(tda_dim),
+            nn.Sigmoid()
+        )
+    def forward(self, x):
+        return x * self.gate(x)
+
 class ConditioningNetwork(nn.Module):
     """
     Combines the Morphology Encoder, TDA Feature Extractor, Spatial Fourier Encoder,
@@ -113,6 +124,12 @@ class ConditioningNetwork(nn.Module):
         # The ViT now takes the concatenated embed_dim + tda_dim + spatial_dim
         self.attention = ViTContextualEncoder(embed_dim=embed_dim + tda_dim + spatial_dim)
         
+        # Heavy regularization for the TDA pathway to prevent overfitting
+        self.tda_dropout = nn.Dropout(0.5)
+        self.tda_layernorm = nn.LayerNorm(tda_dim)
+        # Dynamic gating mechanism to suppress noisy TDA features
+        self.tda_gate = TDAGate(tda_dim)
+        
     def forward(self, patches, coords):
         """
         patches: (batch_size, num_patches, channels, height, width)
@@ -127,7 +144,12 @@ class ConditioningNetwork(nn.Module):
         
         # Extract TDA features
         tda_features = self.tda(patches) # (b, n, tda_dim)
+        tda_features = self.tda_layernorm(tda_features)
+        tda_features = self.tda_dropout(tda_features)
         tda_features_flat = tda_features.view(b * n, -1)
+        
+        # Apply TDA Gate
+        tda_features_flat = self.tda_gate(tda_features_flat)
         
         # Concatenate Morphology and TDA features
         combined_features = torch.cat([patch_features, tda_features_flat], dim=-1) # (b*n, embed_dim + tda_dim)
@@ -162,6 +184,16 @@ class ConditioningNetwork(nn.Module):
             if not hasattr(self, 'tda_adapter'):
                 self.tda_adapter = nn.Linear(tda_feats.shape[-1], target_d - 256 - self.spatial_dim).to(combined_features.device)
             tda_feats = self.tda_adapter(tda_feats)
+            
+            # Apply regularization to TDA features!
+            tda_feats = self.tda_layernorm(tda_feats)
+            tda_feats = self.tda_dropout(tda_feats)
+            
+            # Apply TDA Gate dynamically for precomputed mode as well
+            if not hasattr(self, 'tda_gate'):
+                self.tda_gate = TDAGate(tda_feats.shape[-1]).to(combined_features.device)
+            tda_feats = self.tda_gate(tda_feats)
+            
             combined_features = torch.cat([cnn_feats, tda_feats], dim=-1)
             d = target_d - self.spatial_dim
             

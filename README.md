@@ -19,9 +19,12 @@ To exactly reproduce the tables and figures from the manuscript on the GSE206391
 # 1. Run the 6-fold LOOCV benchmarks and output patient-level metrics to results/metrics.json
 python run_full_benchmarks.py
 
-# 2. Evaluate the zero-shot generalization of the No Topology Flow on the external GSE197023 cohort
+# 2. Run the topological ablation ladder to generate results/tda_ablation.json
+python run_tda_ablation.py
+
+# 3. Evaluate the zero-shot generalization on the external GSE197023 cohort
 python run_external_validation.py
 
-# 3. Generate identical-scale biological marker and deconvolution maps
-python generate_visuals.py
+# 4. Generate all manuscript figures
+python generate_biological_figures.py
 ```

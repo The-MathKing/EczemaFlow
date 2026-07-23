@@ -22,28 +22,57 @@ adata = sc.read_h5ad("data/GSE206391/GSE206391_Preprocessed_data.h5")
 adata = adata[adata.obs['sample'] == slide_id]
 img = Image.open(f"data/images/{slide_id}_HE.tif")
 
-# Find a spot with high density
-print("Finding a spot with high density...")
-best_idx = 500  # Just pick a spot in the middle
-obs = adata.obs.iloc[best_idx]
-px, py = adata.obsm['spatial'][best_idx]
-
-# Apply scale
+# Find a spot with high density by searching 20 random spots
 import json
 with open("data/scales.json", "r") as f:
     scales = json.load(f)
 scale = scales[slide_id]
-px = px * scale['scale_x']
-py = py * scale['scale_y']
 
-# Crop
 patch_size = 224
-left = max(0, int(px - patch_size // 2))
-top = max(0, int(py - patch_size // 2))
-right = left + patch_size
-bottom = top + patch_size
-patch = img.crop((left, top, right, bottom))
-img_np = np.array(patch)
+print("Running StarDist to find high density spot...")
+model = StarDist2D.from_pretrained('2D_versatile_he')
+
+best_idx = 0
+max_nuclei = 0
+best_patch = None
+best_labels = None
+best_details = None
+
+np.random.seed(42)
+indices_to_check = np.random.choice(len(adata), 30, replace=False)
+
+for idx in indices_to_check:
+    px, py = adata.obsm['spatial'][idx]
+    px = px * scale['scale_x']
+    py = py * scale['scale_y']
+    
+    left = max(0, int(px - patch_size // 2))
+    top = max(0, int(py - patch_size // 2))
+    right = left + patch_size
+    bottom = top + patch_size
+    
+    # ensure we don't go out of bounds
+    if right > img.width or bottom > img.height:
+        continue
+        
+    patch = img.crop((left, top, right, bottom))
+    img_np = np.array(patch)
+    img_norm = normalize(img_np, 1, 99.8, axis=(0,1))
+    
+    labels, details = model.predict_instances(img_norm, prob_thresh=0.692, nms_thresh=0.3)
+    num_nuclei = len(details['points'])
+    
+    if num_nuclei > max_nuclei:
+        max_nuclei = num_nuclei
+        best_idx = idx
+        best_patch = img_np
+        best_labels = labels
+        best_details = details
+
+print(f"Found best spot at index {best_idx} with {max_nuclei} nuclei.")
+img_np = best_patch
+labels = best_labels
+details = best_details
 
 print("Running StarDist...")
 model = StarDist2D.from_pretrained('2D_versatile_he')
