@@ -17,17 +17,15 @@ def main():
         metrics = json.load(f)
     
     with_tda_pcc = metrics['EczemaFlow (Full)']['PCC']
-    
-    # We parsed the log previously, No TDA test PCC = 0.0407 (mean across folds was 0.0353)
-    no_tda_pcc = 0.0407
+    no_tda_pcc = metrics['No Topology Flow']['PCC']
     
     fig, ax = plt.subplots(figsize=(6, 5))
-    labels = ['With Topological Extractor', 'Without Topological Extractor (Ablation)']
+    labels = ['With Topology (Full)', 'Without Topology (Ablation)']
     values = [with_tda_pcc, no_tda_pcc]
     
     bars = ax.bar(labels, values, color=['#1f77b4', '#ff7f0e'])
     ax.set_ylabel('Mean Pearson Correlation (PCC)')
-    ax.set_title('Topological Feature Extractor Ablation')
+    ax.set_title('Topological Feature Extractor Ablation (Rejection of H1)')
     
     for bar in bars:
         yval = bar.get_height()
