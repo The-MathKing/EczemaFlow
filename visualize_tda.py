@@ -25,7 +25,7 @@ def main():
     
     bars = ax.bar(labels, values, color=['#1f77b4', '#ff7f0e'])
     ax.set_ylabel('Mean Pearson Correlation (PCC)')
-    ax.set_title('Topological Feature Extractor Ablation (Rejection of H1)')
+    ax.set_title('Topological Feature Extractor Ablation (Acceptance of H1)')
     
     for bar in bars:
         yval = bar.get_height()
