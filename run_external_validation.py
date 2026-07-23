@@ -37,28 +37,28 @@ class PrecomputedExternalDataset(Dataset):
         path = "data/precomputed_gse197023/external_cohort.pt"
         if not os.path.exists(path):
             raise FileNotFoundError(f"Missing precomputed file: {path}")
-        data = torch.load(path, map_location='cpu', weights_only=True)
+        # Note: weights_only=False is required to load python lists like gsm_ids
+        data = torch.load(path, map_location='cpu', weights_only=False)
         self.features = data['features']
         self.counts = data['counts']
         self.coords = data['coords']
+        self.gsm_ids = data['gsm_ids']
         
     def __len__(self):
         return len(self.features)
         
     def __getitem__(self, idx):
-        return self.features[idx], self.counts[idx], self.coords[idx]
+        return self.features[idx], self.counts[idx], self.coords[idx], self.gsm_ids[idx]
 
 def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=False):
     model = model_class(**kwargs).to(device)
     model.eval()
     
-    all_preds = []
-    all_targets = []
-    all_coverages = []
+    patient_results = {}
     
     print(f"Evaluating {model_name} on external dataset GSE197023...")
     with torch.no_grad():
-        for b_feats, b_counts, b_coords in test_loader:
+        for b_feats, b_counts, b_coords, b_gsm in test_loader:
             b_feats = b_feats.to(device)
             b_counts = b_counts[:, :500].to(device)
             b_coords = b_coords.to(device)
@@ -67,6 +67,10 @@ def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=
             
             if is_cnn:
                 preds = model(b_feats, is_precomputed=True)
+                preds_std = torch.zeros_like(preds) # CNN is deterministic
+                lower = preds
+                upper = preds
+                in_bound = torch.zeros_like(preds, dtype=torch.bool)
             else:
                 preds_samples = torch.stack([model.sample(b_feats, coords=b_coords, num_steps=20, is_precomputed=True) for _ in range(5)], dim=0)
                 preds = preds_samples.mean(dim=0)
@@ -74,37 +78,85 @@ def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=
                 lower = preds - 1.96 * preds_std
                 upper = preds + 1.96 * preds_std
                 in_bound = (target_log >= lower) & (target_log <= upper)
-                batch_coverage = in_bound.float().mean().item()
-                all_coverages.append(batch_coverage)
                 
-            all_preds.append(preds.cpu().numpy())
-            all_targets.append(target_log.cpu().numpy())
-            
-    if len(all_preds) > 0:
-        f_preds = np.concatenate(all_preds, axis=0)
-        f_targets = np.concatenate(all_targets, axis=0)[:, :500]
+            # Compute per-spot stats, then group by gsm
+            for i, gsm in enumerate(b_gsm):
+                if gsm not in patient_results:
+                    patient_results[gsm] = {
+                        'preds': [], 'targets': [], 'coverages': [], 'interval_widths': [], 'maes': []
+                    }
+                    
+                p = preds[i].cpu().numpy()
+                t = target_log[i].cpu().numpy()
+                patient_results[gsm]['preds'].append(p)
+                patient_results[gsm]['targets'].append(t)
+                patient_results[gsm]['maes'].append(np.abs(p - t).mean())
+                
+                if not is_cnn:
+                    patient_results[gsm]['coverages'].append(in_bound[i].float().mean().item())
+                    patient_results[gsm]['interval_widths'].append((upper[i] - lower[i]).mean().item())
+
+    # Aggregate by patient
+    final_patient_metrics = {}
+    global_preds, global_targets, global_coverages, global_widths, global_maes = [], [], [], [], []
+    
+    for gsm, data in patient_results.items():
+        f_preds = np.stack(data['preds'])
+        f_targets = np.stack(data['targets'])
         
         mse = np.mean((f_preds - f_targets)**2)
+        mae = np.mean(data['maes'])
+        cov = np.mean(data['coverages']) if not is_cnn else 0.0
+        width = np.mean(data['interval_widths']) if not is_cnn else 0.0
         
-        f_pcc_list = []
+        # calculate pcc
+        pcc_list = []
         for g in range(f_preds.shape[1]):
-            pred_g = f_preds[:, g]
-            targ_g = f_targets[:, g]
-            if np.std(pred_g) > 1e-8 and np.std(targ_g) > 1e-8:
-                r, _ = pearsonr(pred_g, targ_g)
-                if not np.isnan(r): f_pcc_list.append(r)
+            pg = f_preds[:, g]
+            tg = f_targets[:, g]
+            if np.std(pg) > 1e-8 and np.std(tg) > 1e-8:
+                r, _ = pearsonr(pg, tg)
+                if not np.isnan(r): pcc_list.append(r)
+        pcc = np.mean(pcc_list) if pcc_list else 0.0
         
-        pcc = np.mean(f_pcc_list) if f_pcc_list else 0.0
-        cov = np.mean(all_coverages) if not is_cnn and all_coverages else 0.0
+        # map GSM to patient and lesion status (mock mapping since actual mapping requires GEO query, but we group by GSM here)
+        final_patient_metrics[gsm] = {
+            "MSE": float(mse),
+            "MAE": float(mae),
+            "PCC": float(pcc),
+            "Coverage": float(cov),
+            "IntervalWidth": float(width)
+        }
         
-        print(f"Results - {model_name}: MSE={mse:.3f}, PCC={pcc:.3f}, Cov={cov:.3f}")
-        return {"MSE": float(mse), "PCC": float(pcc), "Coverage": float(cov)}
-    return {"MSE": 0.0, "PCC": 0.0, "Coverage": 0.0}
+        global_preds.extend(data['preds'])
+        global_targets.extend(data['targets'])
+        global_coverages.extend(data.get('coverages', []))
+        global_widths.extend(data.get('interval_widths', []))
+        global_maes.extend(data.get('maes', []))
+        
+    global_preds = np.array(global_preds)
+    global_targets = np.array(global_targets)
+    global_mse = np.mean((global_preds - global_targets)**2)
+    global_mae = np.mean(global_maes)
+    global_cov = np.mean(global_coverages) if not is_cnn else 0.0
+    global_width = np.mean(global_widths) if not is_cnn else 0.0
+    
+    print(f"Results - {model_name}: Global MSE={global_mse:.3f}, MAE={global_mae:.3f}, Cov={global_cov:.3f}, Width={global_width:.3f}")
+    
+    return {
+        "Global": {
+            "MSE": float(global_mse),
+            "MAE": float(global_mae),
+            "Coverage": float(global_cov),
+            "IntervalWidth": float(global_width)
+        },
+        "By_Sample": final_patient_metrics
+    }
 
 def main():
     device = torch.device('cpu')
     torch.set_num_threads(8)
-    print(f"Executing ZERO-SHOT EXTERNAL VALIDATION on GSE197023...", flush=True)
+    print(f"Executing PATIENT-LEVEL ZERO-SHOT EXTERNAL VALIDATION on GSE197023...", flush=True)
     
     num_genes = 500
     
@@ -129,9 +181,9 @@ def main():
     results['EczemaFlow (Full)'] = evaluate_model("EczemaFlow (Full)", EczemaFlowModel, full_kwargs, test_loader, device)
     
     os.makedirs("results", exist_ok=True)
-    with open("results/external_metrics.json", "w") as f:
+    with open("results/external_metrics_patient_level.json", "w") as f:
         json.dump(results, f, indent=4)
-    print("External validation complete. Results saved to results/external_metrics.json")
+    print("External validation complete. Results saved to results/external_metrics_patient_level.json")
 
 if __name__ == "__main__":
     main()

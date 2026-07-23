@@ -124,7 +124,7 @@ def generate_marker_maps():
     preds_subset = preds[:n_pts]
     adata_test = adata_test[:n_pts].copy()
     
-    markers = ["CD3D", "COL18A1", "ERBB2"]
+    markers = ["ACTA2", "TPM3", "PSMB4"]
     for m in markers:
         if m in adata_test.var_names:
             idx = adata_test.var_names.get_loc(m)

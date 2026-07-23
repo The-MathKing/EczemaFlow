@@ -29,6 +29,31 @@ class EczemaFlowNoTopology(EczemaFlowModel):
         else:
             return super().sample(patches, coords, num_steps, is_precomputed)
 
+# Ablation: Random Capacity-Matched Features
+class EczemaFlowRandomTopology(EczemaFlowModel):
+    def compute_loss(self, patches, target_counts, coords=None, is_precomputed=True):
+        if is_precomputed:
+            patches_rand = patches.clone()
+            patches_rand[:, :, 256:] = torch.randn_like(patches_rand[:, :, 256:])
+            return super().compute_loss(patches_rand, target_counts, coords, is_precomputed)
+            
+    def sample(self, patches, coords=None, num_steps=20, is_precomputed=True):
+        if is_precomputed:
+            patches_rand = patches.clone()
+            patches_rand[:, :, 256:] = torch.randn_like(patches_rand[:, :, 256:])
+            return super().sample(patches_rand, coords, num_steps, is_precomputed)
+
+# Ablation: Shuffled Coordinates
+class EczemaFlowShuffledCoords(EczemaFlowModel):
+    def compute_loss(self, patches, target_counts, coords=None, is_precomputed=True):
+        shuffled_coords = coords[torch.randperm(coords.size(0))] if coords is not None else None
+        return super().compute_loss(patches, target_counts, shuffled_coords, is_precomputed)
+            
+    def sample(self, patches, coords=None, num_steps=20, is_precomputed=True):
+        shuffled_coords = coords[torch.randperm(coords.size(0))] if coords is not None else None
+        return super().sample(patches, shuffled_coords, num_steps, is_precomputed)
+
+
 # Ablation 2: Gaussian Flow Model
 class GaussianFlowModel(EczemaFlowModel):
     def __init__(self, *args, **kwargs):
@@ -92,16 +117,10 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
         train_dataset = PrecomputedFoldDataset(train_folds)
         val_dataset = PrecomputedFoldDataset([val_fold])
         
-        # ---------------------------------------------------------
-        # NEW: Spatially-Anchored Flow Matching - HVG FIX
-        # The paper claims to filter to the top 500 Highly Variable Genes (HVGs).
-        # Instead of taking the first 500 random sparse columns, we calculate variance.
-        # ---------------------------------------------------------
         all_train_counts = train_dataset.counts
         variances = all_train_counts.var(dim=0)
         top_500_idx = torch.argsort(variances, descending=True)[:500]
         
-        # Batch size 256 speeds through training on CPU!
         train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False)
         
@@ -140,7 +159,6 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
                     preds = model(patches, is_precomputed=True)
                     batch_coverage = 0.0
                 else:
-                    # N=5 samples for rigorous distributional coverage
                     preds_samples = torch.stack([model.sample(patches, b_coords, num_steps=10, is_precomputed=True) for _ in range(5)], dim=0)
                     preds = preds_samples.mean(dim=0)
                     preds_std = preds_samples.std(dim=0) + 1e-6
@@ -199,7 +217,6 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
             "fold_coverages": [float(x) for x in fold_coverages]}
 
 def main():
-    # Force 8-core CPU execution for instantaneous LOOCV benchmarks!
     device = torch.device('cpu')
     torch.set_num_threads(8)
     print(f"Executing PRECOMPUTED 8-CORE CPU empirical run on {device}...", flush=True)
@@ -209,24 +226,14 @@ def main():
     
     results = {}
     
-    cnn_kwargs = {'num_genes': num_genes}
-    results['CNN Regressor'] = train_and_eval_loocv("CNN Regressor", CNNRegressor, cnn_kwargs, device, epochs, is_cnn=True)
-    
-    hist2st_kwargs = {'num_genes': num_genes}
-    results['Hist2ST'] = train_and_eval_loocv("Hist2ST", Hist2STBaseline, hist2st_kwargs, device, epochs, is_cnn=True)
-    
-    gf_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['Gaussian Flow'] = train_and_eval_loocv("Gaussian Flow", GaussianFlowModel, gf_kwargs, device, epochs)
-    
+    # NEW ABLATIONS (Run these first so we don't have to wait for everything else)
     nt_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['No Topology Flow'] = train_and_eval_loocv("No Topology Flow", EczemaFlowNoTopology, nt_kwargs, device, epochs)
+    results['Random Topology Flow'] = train_and_eval_loocv("Random Topology Flow", EczemaFlowRandomTopology, nt_kwargs, device, epochs)
+    results['Shuffled Coords Flow'] = train_and_eval_loocv("Shuffled Coords Flow", EczemaFlowShuffledCoords, nt_kwargs, device, epochs)
     
-    full_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['EczemaFlow (Full)'] = train_and_eval_loocv("EczemaFlow", EczemaFlowModel, full_kwargs, device, epochs)
-    
-    with open("results/metrics.json", "w") as f:
+    with open("results/ablation_metrics.json", "w") as f:
         json.dump(results, f, indent=4)
-    print("Traceable prediction run complete! Results saved to results/metrics.json")
+    print("New ablations complete! Results saved to results/ablation_metrics.json")
 
 if __name__ == "__main__":
     main()
