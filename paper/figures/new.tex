@@ -412,6 +412,47 @@ Future work will expand the TDA pipeline to include 3D volumetric filtrations an
 
 
 
+\section*{Supplementary Figures}
+
+To provide deeper insight into the model's performance, we include additional qualitative and quantitative visualizations.
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{benchmark_chart.pdf}
+\caption{Overall benchmarking results comparing EczemaFlow to baselines.}
+\label{fig:benchmark}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{tda_comparison.pdf}
+\caption{Comparison of model performance with and without Topological Data Analysis (TDA) inputs.}
+\label{fig:tda_comparison}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=\textwidth]{gene_prediction_maps.pdf}
+\caption{Spatial prediction maps for key marker genes (ACTA2, TPM3, PSMB4) across the tissue slide, including residual error maps.}
+\label{fig:gene_maps}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=0.45\textwidth]{spatial_KRT14_observed.pdf}
+\hfill
+\includegraphics[width=0.45\textwidth]{spatial_KRT14_predicted.pdf}
+\caption{Detailed spatial mapping for KRT14 (epidermal marker) showing Observed (left) vs Predicted (right).}
+\label{fig:specific_markers}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{deconvolution_map.pdf}
+\caption{Spatial deconvolution maps highlighting distinct cell-type niches recovered by the generative flow.}
+\label{fig:deconvolution}
+\end{figure*}
+
 \section*{Data and Code Availability}
 
 All data evaluated in this study are derived from the publicly available \datasetrequired. Code, archived
