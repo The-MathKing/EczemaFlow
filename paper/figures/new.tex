@@ -31,7 +31,7 @@
 \abstract{%
 \textbf{Motivation:} Existing methods for predicting spatial gene expression from H\&E histology primarily represent morphology through learned image embeddings, local neighborhoods, or spatial graphs. Whether explicit multiscale topology of H\&E-visible nuclei provides complementary predictive information in inflammatory dermatology contexts remains unresolved.
 \\
-\textbf{Results:} We present \softwarename, a conditional flow-matching model that combines pathology-image features with persistent-homology summaries of nuclei point clouds and Fourier-encoded spatial coordinates, validated on 6 Visium slides (22,788 spots) from a mixed inflammatory skin disease cohort (GSE206391). Using 6-fold cross-validation, \softwarename~achieves state-of-the-art predictive accuracy (MSE $0.334 \pm 0.015$) outperforming both CNN regressors and Hist2ST. Furthermore, \softwarename~provides rigorous distributional uncertainty with a 95\% nominal interval coverage of $83.6\%$, and ablating the topological features significantly degrades both MSE and correlation.
+\textbf{Results:} We present \softwarename, a conditional flow-matching model that combines pathology-image features with persistent-homology summaries of nuclei point clouds and Fourier-encoded spatial coordinates, validated on 6 Visium slides (15,281 spots) from a mixed inflammatory skin disease cohort (GSE206391). Using 6-fold cross-validation, the spatially anchored flow architecture without topology achieves the best predictive accuracy among evaluated models (MSE $0.329 \pm 0.006$) outperforming both CNN regressors and Hist2ST. Adding persistent-topology features unexpectedly worsened MSE (to $0.342$) and reduced correlation, providing no evidence that explicit nuclei topology adds predictive value in this cohort. Furthermore, the base Gaussian flow provides well-calibrated distributional uncertainty (94.6\% nominal interval coverage), whereas the full ZINB flow is undercalibrated (83.2\% coverage).
 \textbf{Availability and implementation:} Source code, configurations, and reproduction instructions: \coderequired.
 \textbf{Contact:} \contactinfo.
 \textbf{Supplementary information:} Supplementary data are supplied in a separate file.}
@@ -109,7 +109,7 @@ This study employs a rigorous 6-fold Leave-One-Patient-Out Cross-Validation (LOO
 
 \subsection{Dataset documentation}
 
-The study uses the publicly available GSE206391 cohort: 6 patients with paired H\&E Whole-Slide Images (WSIs) and 10x Genomics Visium spatial transcriptomics slides. The cohort represents mixed inflammatory skin diseases: Patient 1 (psoriasis), Patient 2 (AD), Patient 3 (lichen planus), Patient 5 (AD), Patient 6 (lichen planus), and Patient 8 (AD). The total dataset comprises 22,788 spatial spots. Each spot is associated with physical $(x, y)$ coordinates, a raw count matrix, and a $224 \times 224$ pixel H\&E patch extracted at $20\times$ magnification.
+The study uses the publicly available GSE206391 cohort: 6 patients with paired H\&E Whole-Slide Images (WSIs) and 10x Genomics Visium spatial transcriptomics slides. The cohort represents mixed inflammatory skin diseases: Patient 1 (psoriasis), Patient 2 (AD), Patient 3 (lichen planus), Patient 5 (AD), Patient 6 (lichen planus), and Patient 8 (AD). After filtering, the total dataset comprises 15,281 spatial spots across 24 tissue capture areas. Each spot is associated with physical $(x, y)$ coordinates, a raw count matrix, and a $224 \times 224$ pixel H\&E patch extracted at $20\times$ magnification.
 
 \begin{table}[h]
 \centering
@@ -119,12 +119,12 @@ The study uses the publicly available GSE206391 cohort: 6 patients with paired H
 \hline
 \textbf{Patient ID} & \textbf{GSM Accessions (4 Slides Each)} & \textbf{Condition} & \textbf{Fold} \\
 \hline
-Patient 1 & GSM6252931 -- GSM6252934 & Psoriasis (Lesional/Non-lesional) & 1 \\
-Patient 2 & GSM6252935 -- GSM6252938 & AD (Lesional/Non-lesional) & 2 \\
-Patient 3 & GSM6252939 -- GSM6252942 & Lichen Planus (Lesional/Non-lesional) & 3 \\
-Patient 5 & GSM6252943 -- GSM6252946 & AD (Lesional/Non-lesional) & 4 \\
-Patient 6 & GSM6252947 -- GSM6252950 & Lichen Planus (Lesional/Non-lesional) & 5 \\
-Patient 8 & GSM6252951 -- GSM6252954 & AD (Lesional/Non-lesional) & Test \\
+Patient 1 & GSM6252911 -- GSM6252914 & Psoriasis (Lesional/Non-lesional) & 1 \\
+Patient 2 & GSM6252915 -- GSM6252918 & AD (Lesional/Non-lesional) & 2 \\
+Patient 3 & GSM6252919 -- GSM6252922 & Lichen Planus (Lesional/Non-lesional) & 3 \\
+Patient 5 & GSM6252927 -- GSM6252930 & AD (Lesional/Non-lesional) & 4 \\
+Patient 6 & GSM6252931 -- GSM6252934 & Lichen Planus (Lesional/Non-lesional) & 5 \\
+Patient 8 & GSM6252939 -- GSM6252942 & AD (Lesional/Non-lesional) & Test \\
 \hline
 \end{tabular}
 \end{table}
@@ -179,12 +179,13 @@ by grounding the flow ODE in the physical tissue coordinate space, the model res
 visually ambiguous H\&E patches based on their anatomical position, improving prediction
 in spatially structured tissue gradients such as epidermal vs.\ dermal zones.
 
-We sample $x_0 \sim \text{ZINB}(\mu, \theta, \pi)$ (dynamically parameterized by $c_s$)
-and $\tau\sim\mathcal{U}(0,1)$, then define the linear conditional path
+We sample raw counts $z_0 \sim \text{ZINB}(\mu, \theta, \pi)$ (dynamically parameterized by $c_s$), transform them to the identical continuous target log-expression space via $x_0 = \log(1+z_0)$, and sample $\tau\sim\mathcal{U}(0,1)$. We then define the linear conditional path
 
 \begin{equation}
 x_{\tau}=(1-\tau)x_0+\tau x_1.
 \end{equation}
+
+By log-transforming the ZINB samples prior to integration, both endpoints of the vector field are in the identical representation space, resolving any geometric scale incompatibility.
 
 A Mixture-of-Experts (MoE) time-conditioned vector field
 $v_{\theta}(x_{\tau},\tau,c_s)$ with 4 experts and Top-2 routing is trained with the flow-matching objective
@@ -236,8 +237,8 @@ The following models were retrained and evaluated under matched patient splits a
 \item CNN Regressor: a simple convolutional image encoder with MSE loss;
 \item Hist2ST \citep{zeng2022hist2st}: a Transformer-based spatial graph surrogate;
 \item Gaussian Flow (ablation): EczemaFlow with a Gaussian prior instead of ZINB;
-\item No Context Flow (ablation): EczemaFlow without the ViT contextual attention encoder;
-\item EczemaFlow (full): Spatially-Anchored Flow Matching with TDA + ViT + ZINB.
+\item No Topology Flow (ablation): EczemaFlow without the multiscale persistent topology features;
+\item \softwarename~(full): Spatially-Anchored Flow Matching with TDA + ViT + ZINB.
 \end{enumerate}
 
 All models use identical patient splits, HVG gene panels, and preprocessing. STFlow and foundation model comparisons were computationally prohibitive in this environment.
@@ -379,7 +380,7 @@ EczemaFlow utilizes a pre-trained frozen ViT-B/16 backbone, yielding $94.8$ mill
 
 \section{Discussion}
 
-\softwarename~successfully formulates spatial transcriptomics prediction as a continuous normalizing flow. Our empirical evaluations demonstrate that the flow-matching formulation provides highly calibrated credible intervals (83.2\% coverage), representing a significant step forward for uncertainty-aware spatial transcriptomics. However, strict ablation studies demonstrate that explicit topological conditioning does not improve point-prediction performance over standard spatial-image features. While the No Topology Flow ablation achieves a state-of-the-art Mean Squared Error (0.329) against standard deterministic CNN regressors on a mixed inflammatory skin disease cohort, the inclusion of multiscale topology slightly degraded this accuracy.
+\softwarename~successfully formulates spatial transcriptomics prediction as a continuous normalizing flow. Our empirical evaluations demonstrate that the flow-matching formulation provides highly calibrated credible intervals (94.6\% coverage for Gaussian Flow), representing a significant step forward for uncertainty-aware spatial transcriptomics. However, strict ablation studies demonstrate that explicit topological conditioning does not improve point-prediction performance over standard spatial-image features. While the No Topology Flow ablation achieves the best Mean Squared Error (0.329) among evaluated models on a mixed inflammatory skin disease cohort, the inclusion of multiscale topology slightly degraded this accuracy.
 
 \section{Limitations}
 
@@ -390,24 +391,22 @@ technical and biological zeros, computational cost of repeated ODE
 integration, and the possibility that topology adds no information beyond
 simpler descriptors. Generalization across diseases, anatomical sites,
 populations, scanners, and spatial technologies cannot be inferred from a
-single study cohort. Furthermore, the use of a simple $\log(1 + y)$ target without library-size scaling means that differences in sequencing depth remain embedded in the target, which could cause the model to partly predict technical UMI depth rather than purely gene-specific biology.
+single study cohort. Furthermore, the use of a simple $\log(1 + y)$ target without library-size scaling means that differences in sequencing depth remain embedded in the target, which could cause the model to partly predict technical UMI depth (e.g. capture efficiency) rather than purely gene-specific biology. Absolute spatial coordinates may also introduce shortcuts, allowing the model to learn geometry and tissue placement rather than transferable spatial biology.
 
 The use of a selected gene panel limits claims about whole-transcriptome
 reconstruction. Spot-level Visium measurements also mix multiple cells, so
 spot predictions cannot be interpreted as single-cell expression or direct
 cell--cell interactions. Any downstream interaction inference remains
 indirect unless validated with measured spatial data and appropriate null
-models.
+models. Furthermore, the deconvolution maps produced in this study are strictly exploratory and unvalidated against single-cell references.
 
 \section{Conclusion}
 
-EczemaFlow introduces a novel continuous normalizing flow for spatial transcriptomic inference from standard histology. By explicitly conditioning flow models on deep image features and spatial coordinates, we achieve state-of-the-art predictive accuracy and rigorous distributional calibration (83.2\% coverage) on a mixed inflammatory skin disease cohort. However, strict ablation of the Vietoris-Rips topological features unexpectedly improved performance, confirming that multiscale persistence does not capture critical tissue architecture beyond what is already learned by spatial attention mechanisms. This negative result highlights the difficulty of explicitly engineering topological priors for complex transcriptomic tasks.
+EczemaFlow introduces a novel continuous normalizing flow for spatial transcriptomic inference from standard histology. By explicitly conditioning flow models on deep image features and spatial coordinates, we achieve the best predictive accuracy among the evaluated models and rigorous distributional calibration via the Gaussian variant (94.6\% coverage) on a mixed inflammatory skin disease cohort. However, strict ablation of the Vietoris-Rips topological features unexpectedly improved performance, confirming that multiscale persistence does not capture critical tissue architecture beyond what is already learned by spatial attention mechanisms. This negative result highlights the difficulty of explicitly engineering topological priors for complex transcriptomic tasks.
 
 Future work will expand the TDA pipeline to include 3D volumetric filtrations and explore non-Eulerian solvers for even faster spatial inference.
 
-\section{Acknowledgements}
 
-This work was supported by independent research efforts at Allen High School (Allen, TX). We thank the authors of the GSE206391 dataset for providing open-access spatial transcriptomics resources. We additionally thank the developers of StarDist, Scanpy, STFlow, and Ripser for their foundational open-source tools.
 
 \section*{Supplementary Figures}
 
@@ -450,12 +449,7 @@ To provide deeper insight into the model's performance, we include additional qu
 \label{fig:deconvolution}
 \end{figure*}
 
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.8\textwidth]{ligand_receptor_dotplot.pdf}
-\caption{Exploratory ligand-receptor interaction recovery dotplot from the inferred spatial transcriptomes.}
-\label{fig:ligand_receptor}
-\end{figure*}
+
 
 \section*{Data and Code Availability}
 
@@ -473,14 +467,14 @@ reproduction instructions: \coderequired.
 
 \section*{Funding}
 
-\fundingrequired.
+\fundingrequired
 
 \section*{Conflict of Interest}
 
-\conflictrequired.
+\conflictrequired
 
 \section*{Acknowledgements}
-The authors thank the computational biology community for open-source tools.
+This work was supported by independent research efforts at Allen High School (Allen, TX). We thank the authors of the GSE206391 dataset for providing open-access spatial transcriptomics resources. We additionally thank the developers of StarDist, Scanpy, STFlow, and Ripser for their foundational open-source tools.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

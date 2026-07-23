@@ -193,7 +193,10 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
     print(f"LOOCV Results for {model_name}: MSE={mse:.3f}±{mse_ci:.3f}, PCC={pcc:.3f}±{pcc_ci:.3f}, MMD={mmd:.3f}, Cov={cov:.3f}")
     return {"MSE": mse, "MSE_std": mse_std, "MSE_CI_95": float(mse_ci), 
             "PCC": pcc, "PCC_std": pcc_std, "PCC_CI_95": float(pcc_ci), 
-            "MMD": mmd, "MMD_std": mmd_std, "Coverage": cov}
+            "MMD": mmd, "MMD_std": mmd_std, "Coverage": cov,
+            "fold_mses": [float(x) for x in fold_mses],
+            "fold_pccs": [float(x) for x in fold_pccs],
+            "fold_coverages": [float(x) for x in fold_coverages]}
 
 def main():
     # Force 8-core CPU execution for instantaneous LOOCV benchmarks!

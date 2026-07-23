@@ -11,3 +11,17 @@ This repository contains the official implementation of the EczemaFlow model. To
 - **Quantitative Baselines**: The `Hist2ST` baseline and Maximum Mean Discrepancy (MMD) distribution metrics are implemented and executed in `run_full_benchmarks.py`.
 
 The optimization script `train.py` defaults to the production configuration: 50 epochs, batch size 64, over the 500 equivalent Highly Variable Genes.
+
+### Reproduction Instructions
+To exactly reproduce the tables and figures from the manuscript on the GSE206391 mixed inflammatory skin disease cohort, run:
+
+```bash
+# 1. Run the 6-fold LOOCV benchmarks and output patient-level metrics to results/metrics.json
+python run_full_benchmarks.py
+
+# 2. Evaluate the zero-shot generalization of the No Topology Flow on the external GSE197023 cohort
+python run_external_validation.py
+
+# 3. Generate identical-scale biological marker and deconvolution maps
+python generate_visuals.py
+```

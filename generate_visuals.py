@@ -23,13 +23,6 @@ def generate_visuals(data_path, output_dir):
     # For now, we plot the observed expression properly to establish provenance without the breast cancer fake.
     
     for m in markers:
-        # 1. Observed Expression
-        # Subset to specific slide for plotting
-        adata_plot = adata_test_full[adata_test_full.obs['sample'] == test_slide]
-        sc.pl.spatial(adata_plot, color=m, library_id=test_slide, show=False, title=f"{m} (Observed)")
-        plt.savefig(os.path.join(output_dir, f'spatial_{m}_observed.pdf'), bbox_inches='tight', dpi=300)
-        plt.close()
-        
         # 2. Predicted Expression
         pred_path = f"results/EczemaFlow_test_preds.npy"
         if os.path.exists(pred_path):
@@ -40,7 +33,17 @@ def generate_visuals(data_path, output_dir):
             adata_test_full.obs[f"{m}_predicted"] = adata_test_full[:, m].X.toarray().flatten() + np.random.normal(0, 0.1, adata_test_full.n_obs)
             
         adata_plot = adata_test_full[adata_test_full.obs['sample'] == test_slide]
-        sc.pl.spatial(adata_plot, color=f"{m}_predicted", library_id=test_slide, show=False, title=f"{m} (Predicted)")
+        
+        obs_vals = adata_plot[:, m].X.toarray().flatten()
+        pred_vals = adata_plot.obs[f"{m}_predicted"].values
+        vmax = max(np.max(obs_vals), np.max(pred_vals))
+        vmin = min(np.min(obs_vals), np.min(pred_vals))
+
+        sc.pl.spatial(adata_plot, color=m, library_id=test_slide, vmin=vmin, vmax=vmax, show=False, title=f"{m} (Observed)")
+        plt.savefig(os.path.join(output_dir, f'spatial_{m}_observed.pdf'), bbox_inches='tight', dpi=300)
+        plt.close()
+
+        sc.pl.spatial(adata_plot, color=f"{m}_predicted", library_id=test_slide, vmin=vmin, vmax=vmax, show=False, title=f"{m} (Predicted)")
         plt.savefig(os.path.join(output_dir, f'spatial_{m}_predicted.pdf'), bbox_inches='tight', dpi=300)
         plt.close()
         

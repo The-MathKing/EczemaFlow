@@ -1,121 +1,92 @@
-"""
-Run external validation on GSE197023.
-
-Trains EczemaFlow on ALL GSE206391 (development cohort),
-then evaluates zero-shot on GSE197023 (external cohort).
-"""
-import torch
-import torch.optim as optim
-import numpy as np
-import json
 import os
-from torch.utils.data import DataLoader
+import torch
+import numpy as np
+from torch.utils.data import DataLoader, Dataset
 from scipy.stats import pearsonr
 
-import sys
-sys.path.insert(0, '/Volumes/2TB/EczemaFlow-1')
-from run_full_benchmarks import PrecomputedFoldDataset
-from eczema_flow.dataset import PrecomputedVisiumDataset
 from eczema_flow.model import EczemaFlowModel
 
-device = torch.device('cpu')
-os.makedirs("results", exist_ok=True)
+# Ablation 1: No Context (Simple Mean Pooling instead of ViT+TDA)
+class EczemaFlowNoTopology(EczemaFlowModel):
+    def compute_loss(self, patches, target_counts, coords=None, is_precomputed=True):
+        if is_precomputed:
+            patches_no_topo = patches.clone()
+            patches_no_topo[:, :, 256:] = 0.0
+            return super().compute_loss(patches_no_topo, target_counts, coords, is_precomputed)
+        else:
+            return super().compute_loss(patches, target_counts, coords, is_precomputed)
+            
+    def sample(self, patches, coords=None, num_steps=20, is_precomputed=True):
+        if is_precomputed:
+            patches_no_topo = patches.clone()
+            patches_no_topo[:, :, 256:] = 0.0
+            return super().sample(patches_no_topo, coords, num_steps, is_precomputed)
+        else:
+            return super().sample(patches, coords, num_steps, is_precomputed)
 
-print("="*60)
-print("External Validation on GSE197023 (Mitamura et al. 2023)")
-print("="*60)
-
-# 1. Load full development cohort (all folds)
-folds = [f"fold_{i}" for i in range(1, 6)] + ["test"]
-train_ds = PrecomputedFoldDataset(folds)
-print(f"Loaded full development cohort: {len(train_ds)} spots")
-
-# Determine HVGs from development cohort
-variances = train_ds.counts.var(dim=0)
-top_idx = torch.argsort(variances, descending=True)[:500]
-
-# 2. Train model on full development cohort
-model = EczemaFlowModel(num_genes=500, num_experts=4, device=device).to(device)
-optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-5)
-train_loader = DataLoader(train_ds, batch_size=256, shuffle=True)
-
-EPOCHS = 50
-print(f"Training EczemaFlow for {EPOCHS} epochs on full development cohort...")
-for epoch in range(EPOCHS):
-    model.train()
-    for patches, b_counts, b_coords in train_loader:
-        patches = patches.to(device)
-        b_counts = b_counts[:, top_idx].to(device)
-        b_coords = b_coords.to(device)
-        optimizer.zero_grad()
-        loss = model.compute_loss(patches, b_counts, b_coords, is_precomputed=True)
-        loss.backward()
-        optimizer.step()
-    if (epoch+1) % 10 == 0:
-        print(f"  Epoch {epoch+1}/{EPOCHS} completed")
-
-# 3. Load external cohort
-ext_path = "data/precomputed_gse197023/external_cohort.pt"
-if not os.path.exists(ext_path):
-    print(f"ERROR: {ext_path} not found. Did preprocess_gse197023.py complete successfully?")
-    sys.exit(1)
-
-ext_ds = PrecomputedVisiumDataset(ext_path)
-print(f"Loaded external cohort: {len(ext_ds)} spots")
-
-# 4. Evaluate zero-shot
-ext_loader = DataLoader(ext_ds, batch_size=256, shuffle=False)
-model.eval()
-
-all_preds = []
-all_targets = []
-with torch.no_grad():
-    for patches, b_counts, b_coords in ext_loader:
-        # patches is (B, 4, 512) where CNN is :256 and TDA is 256:
-        # We need to match the development set which had 64-dim TDA (total 320)
-        cnn_part = patches[:, :, :256]
-        tda_part = patches[:, :, 256:256+64]
-        patches = torch.cat([cnn_part, tda_part], dim=-1)
+class PrecomputedExternalDataset(Dataset):
+    def __init__(self):
+        path = "data/precomputed_gse197023/external_cohort.pt"
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Missing precomputed file: {path}")
+        data = torch.load(path, map_location='cpu', weights_only=True)
+        self.features = data['features']
+        self.counts = data['counts']
+        self.coords = data['coords']
         
-        patches = patches.to(device)
-        b_counts = b_counts[:, top_idx].to(device)  # We use the same top_idx! (aligned)
-        b_coords = b_coords.to(device)
+    def __len__(self):
+        return len(self.features)
         
-        target_log = torch.log1p(b_counts)
-        preds = model.sample(patches, b_coords, num_steps=20, is_precomputed=True)
+    def __getitem__(self, idx):
+        return self.features[idx], self.counts[idx], self.coords[idx]
+
+def main():
+    device = torch.device('cpu')
+    torch.set_num_threads(8)
+    print(f"Executing ZERO-SHOT EXTERNAL VALIDATION on GSE197023...", flush=True)
+    
+    num_genes = 500
+    
+    test_ds = PrecomputedExternalDataset()
+    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False)
+    
+    model = EczemaFlowNoTopology(num_genes=num_genes, num_experts=4, device=device).to(device)
+    model.eval()
+    
+    all_preds = []
+    all_targets = []
+    
+    with torch.no_grad():
+        for b_feats, b_counts, b_coords in test_loader:
+            b_feats = b_feats.to(device)
+            b_counts = b_counts.to(device)
+            b_coords = b_coords.to(device)
+            
+            target_log = torch.log1p(b_counts)
+            preds = model.sample(b_feats, coords=b_coords, num_steps=20, is_precomputed=True)
+            
+            all_preds.append(preds.cpu().numpy())
+            all_targets.append(target_log.cpu().numpy())
+            
+    if len(all_preds) > 0:
+        f_preds = np.concatenate(all_preds, axis=0)
+        f_targets = np.concatenate(all_targets, axis=0)[:, :500]
         
-        all_preds.append(preds.cpu().numpy())
-        all_targets.append(target_log.cpu().numpy())
+        mse = np.mean((f_preds - f_targets)**2)
+        
+        f_pcc_list = []
+        for g in range(f_preds.shape[1]):
+            pred_g = f_preds[:, g]
+            targ_g = f_targets[:, g]
+            if np.std(pred_g) > 1e-8 and np.std(targ_g) > 1e-8:
+                r, _ = pearsonr(pred_g, targ_g)
+                if not np.isnan(r): f_pcc_list.append(r)
+        
+        pcc = np.mean(f_pcc_list) if f_pcc_list else 0.0
+        
+        print(f"External Validation Results (GSE197023) - No Topology Flow:")
+        print(f"MSE: {mse:.3f}")
+        print(f"PCC: {pcc:.3f}")
 
-preds_all = np.concatenate(all_preds, axis=0)
-tgts_all = np.concatenate(all_targets, axis=0)
-
-# Compute gene-wise PCC
-pcc_list = []
-for g in range(preds_all.shape[1]):
-    p = preds_all[:, g]
-    t = tgts_all[:, g]
-    if np.std(p) > 1e-8 and np.std(t) > 1e-8:
-        r, _ = pearsonr(p, t)
-        if not np.isnan(r):
-            pcc_list.append(r)
-
-mean_pcc = float(np.mean(pcc_list)) if pcc_list else 0.0
-mse = float(np.mean((preds_all - tgts_all)**2))
-
-print(f"\n[RESULT] Zero-Shot External Validation (GSE197023):")
-print(f"  PCC: {mean_pcc:.4f}")
-print(f"  MSE: {mse:.4f}")
-
-results = {
-    'external_cohort': 'GSE197023',
-    'num_spots': len(ext_ds),
-    'num_hvgs_evaluated': 500,
-    'mean_gene_pcc': mean_pcc,
-    'mean_mse': mse
-}
-
-with open("results/external_validation.json", "w") as f:
-    json.dump(results, f, indent=2)
-
-print("\nResults saved to results/external_validation.json")
+if __name__ == "__main__":
+    main()
