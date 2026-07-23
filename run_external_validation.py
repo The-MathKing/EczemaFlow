@@ -50,7 +50,7 @@ def main():
     test_ds = PrecomputedExternalDataset()
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False)
     
-    model = EczemaFlowNoTopology(num_genes=num_genes, num_experts=4, device=device).to(device)
+    model = EczemaFlowModel(num_genes=num_genes, num_experts=4, device=device).to(device)
     model.eval()
     
     all_preds = []
@@ -84,7 +84,7 @@ def main():
         
         pcc = np.mean(f_pcc_list) if f_pcc_list else 0.0
         
-        print(f"External Validation Results (GSE197023) - No Topology Flow:")
+        print(f"External Validation Results (GSE197023) - EczemaFlow (Full):")
         print(f"MSE: {mse:.3f}")
         print(f"PCC: {pcc:.3f}")
 
