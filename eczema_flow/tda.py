@@ -21,15 +21,22 @@ class TDAFeatureExtractor(nn.Module):
         # Persim defaults to 20x20 images for Betti-1 (400 dims) + Betti-0 (400 dims) = 800
         self.projection = nn.Linear(800, output_dim)
         
-        try:
-            from stardist.models import StarDist2D
-            self.stardist_model = StarDist2D.from_pretrained('2D_versatile_he')
-        except ImportError:
-            self.stardist_model = None
-            print("Warning: stardist not installed. TDA extraction will fail.")
+        self._stardist_initialized = False
+        self.stardist_model = None
         
     def _extract_nuclei_points(self, patch_np):
         """ Extract nuclei coordinates from a single patch using pre-trained StarDist2D. """
+        if not self._stardist_initialized:
+            try:
+                import os
+                os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # Force TF to CPU to avoid MPS conflict
+                from stardist.models import StarDist2D
+                self.stardist_model = StarDist2D.from_pretrained('2D_versatile_he')
+            except ImportError:
+                self.stardist_model = None
+                print("Warning: stardist not installed. TDA extraction will fail.")
+            self._stardist_initialized = True
+            
         if self.stardist_model is None:
             return np.zeros((0, 2))
             

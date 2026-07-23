@@ -1,0 +1,9 @@
+{
+  "total_parameters": 94866064,
+  "trainable_parameters": 9067376,
+  "avg_epoch_time_seconds": 4.005722363789876,
+  "inference_time_seconds_all_spots": 1.0437591075897217,
+  "num_val_spots": 2852,
+  "per_spot_inference_ms": 0.36597444165137505,
+  "ode_steps": 20
+}

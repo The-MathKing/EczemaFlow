@@ -1,0 +1,18 @@
+============================================================
+External Validation on GSE197023 (Mitamura et al. 2023)
+============================================================
+Loaded full development cohort: 15281 spots
+Training EczemaFlow for 50 epochs on full development cohort...
+  Epoch 10/50 completed
+  Epoch 20/50 completed
+  Epoch 30/50 completed
+  Epoch 40/50 completed
+  Epoch 50/50 completed
+Loaded PrecomputedVisiumDataset with 9585 spots from data/precomputed_gse197023/external_cohort.pt
+Loaded external cohort: 9585 spots
+
+[RESULT] Zero-Shot External Validation (GSE197023):
+  PCC: 0.0230
+  MSE: 2.1134
+
+Results saved to results/external_validation.json

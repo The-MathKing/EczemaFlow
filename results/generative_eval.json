@@ -1,0 +1,7 @@
+{
+  "n_samples_per_spot": 10,
+  "mean_pcc_of_ensemble": 0.10321396589279175,
+  "mean_predictive_std": 0.8842387795448303,
+  "uncertainty_error_correlation": 0.6688500642776489,
+  "description": "Positive correlation means higher uncertainty -> higher error (calibrated)"
+}

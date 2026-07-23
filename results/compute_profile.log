@@ -1,0 +1,22 @@
+Total parameters:     94,866,064
+Trainable parameters: 9,067,376
+Epoch 1: 3.7s
+Epoch 2: 4.0s
+Epoch 3: 4.4s
+
+Average training time per epoch: 4.0s
+
+Inference time for 2852 spots: 1.0s
+Per-spot inference time: 0.37 ms
+ODE evaluations per spot: 20 steps
+
+Profile saved to results/compute_profile.json
+{
+  "total_parameters": 94866064,
+  "trainable_parameters": 9067376,
+  "avg_epoch_time_seconds": 4.005722363789876,
+  "inference_time_seconds_all_spots": 1.0437591075897217,
+  "num_val_spots": 2852,
+  "per_spot_inference_ms": 0.36597444165137505,
+  "ode_steps": 20
+}

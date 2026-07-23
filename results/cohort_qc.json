@@ -1,0 +1,43 @@
+{
+  "folds": [
+    {
+      "fold": "fold_1",
+      "n_spots": 2722,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1298.939208984375
+    },
+    {
+      "fold": "fold_2",
+      "n_spots": 2087,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1758.3724365234375
+    },
+    {
+      "fold": "fold_3",
+      "n_spots": 2357,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1788.9847412109375
+    },
+    {
+      "fold": "fold_4",
+      "n_spots": 1957,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1165.5760498046875
+    },
+    {
+      "fold": "fold_5",
+      "n_spots": 3306,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1479.1258544921875
+    },
+    {
+      "fold": "test",
+      "n_spots": 2852,
+      "n_genes": 16685,
+      "mean_umi_per_spot": 1544.255615234375
+    }
+  ],
+  "total_spots": 15281,
+  "total_genes_raw": 16685,
+  "hvg_panel": 500
+}

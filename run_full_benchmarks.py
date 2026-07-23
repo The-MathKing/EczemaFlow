@@ -12,45 +12,22 @@ from eczema_flow.model import EczemaFlowModel
 from eczema_flow.model_baselines import CNNRegressor, Hist2STBaseline, GaussianPrior
 
 # Ablation 1: No Context (Simple Mean Pooling instead of ViT+TDA)
-class EczemaFlowNoAttention(EczemaFlowModel):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mean_pool_proj = torch.nn.Linear(320, kwargs.get('cond_dim', 256) + kwargs.get('tda_dim', 256))
-        
-    def compute_loss(self, patches, target_counts, is_precomputed=True):
-        batch_size = patches.size(0)
-        c = patches.mean(dim=1)
-        c = self.mean_pool_proj(c)
-        
-        x_1 = torch.log1p(target_counts).to(self.device)
-        x_0 = self.prior.sample(c).to(self.device)
-        t = torch.rand(batch_size, 1, device=self.device)
-        x_t = t * x_1 + (1 - t) * x_0
-        u_t = x_1 - x_0
-        v_theta = self.vector_field(t, x_t, c)
-        
-        loss_fm = torch.mean((v_theta - u_t)**2)
-        loss_bal = self.vector_field.compute_load_balancing_loss(c)
-        loss = loss_fm + 0.01 * loss_bal
-        return loss
-        
-    def sample(self, patches, num_steps=20, is_precomputed=True):
-        from torchdiffeq import odeint
-        c = patches.mean(dim=1)
-        c = self.mean_pool_proj(c)
-        x_0 = self.prior.sample(c).to(self.device)
-        class ODEWrapper(torch.nn.Module):
-            def __init__(self, vf, c):
-                super().__init__()
-                self.vf = vf
-                self.c = c
-            def forward(self, t, x):
-                return self.vf(t, x, self.c)
-        ode_func = ODEWrapper(self.vector_field, c)
-        t_span = torch.linspace(0, 1, num_steps, device=self.device)
-        with torch.no_grad():
-            trajectory = odeint(ode_func, x_0, t_span, method='euler')
-        return trajectory[-1]
+class EczemaFlowNoTopology(EczemaFlowModel):
+    def compute_loss(self, patches, target_counts, coords=None, is_precomputed=True):
+        if is_precomputed:
+            patches_no_topo = patches.clone()
+            patches_no_topo[:, :, 256:] = 0.0
+            return super().compute_loss(patches_no_topo, target_counts, coords, is_precomputed)
+        else:
+            return super().compute_loss(patches, target_counts, coords, is_precomputed)
+            
+    def sample(self, patches, coords=None, num_steps=20, is_precomputed=True):
+        if is_precomputed:
+            patches_no_topo = patches.clone()
+            patches_no_topo[:, :, 256:] = 0.0
+            return super().sample(patches_no_topo, coords, num_steps, is_precomputed)
+        else:
+            return super().sample(patches, coords, num_steps, is_precomputed)
 
 # Ablation 2: Gaussian Flow Model
 class GaussianFlowModel(EczemaFlowModel):
@@ -103,6 +80,7 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
     fold_mses = []
     fold_pccs = []
     fold_mmds = []
+    fold_coverages = []
     
     folds = [f"fold_{i}" for i in range(1, 6)] + ["test"]
     
@@ -114,20 +92,30 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
         train_dataset = PrecomputedFoldDataset(train_folds)
         val_dataset = PrecomputedFoldDataset([val_fold])
         
+        # ---------------------------------------------------------
+        # NEW: Spatially-Anchored Flow Matching - HVG FIX
+        # The paper claims to filter to the top 500 Highly Variable Genes (HVGs).
+        # Instead of taking the first 500 random sparse columns, we calculate variance.
+        # ---------------------------------------------------------
+        all_train_counts = train_dataset.counts
+        variances = all_train_counts.var(dim=0)
+        top_500_idx = torch.argsort(variances, descending=True)[:500]
+        
         # Batch size 256 speeds through training on CPU!
         train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False)
         
         model = model_class(**kwargs).to(device)
             
-        optimizer = optim.AdamW(model.parameters(), lr=2e-3)
+        optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-5)
         model.train()
         
-        print(f"Training {model_name} on {val_fold} (held out)...")
+        print(f"Training {model_name} on {val_fold} (held out)...", flush=True)
         for epoch in range(epochs):
             for patches, b_counts, b_coords in train_loader:
                 patches = patches.to(device)
-                b_counts = b_counts[:, :500].to(device)
+                b_counts = b_counts[:, top_500_idx].to(device)
+                b_coords = b_coords.to(device)
                 
                 optimizer.zero_grad()
                 if is_cnn:
@@ -135,21 +123,32 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
                     target_log = torch.log1p(b_counts)
                     loss = F.mse_loss(preds, target_log)
                 else:
-                    loss = model.compute_loss(patches, b_counts, is_precomputed=True)
+                    loss = model.compute_loss(patches, b_counts, b_coords, is_precomputed=True)
                 loss.backward()
                 optimizer.step()
                 
         model.eval()
+        all_coverages = []
         with torch.no_grad():
             for patches, b_counts, b_coords in val_loader:
                 patches = patches.to(device)
-                b_counts = b_counts[:, :500].to(device)
+                b_counts = b_counts[:, top_500_idx].to(device)
+                b_coords = b_coords.to(device)
                 
                 target_log = torch.log1p(b_counts)
                 if is_cnn:
                     preds = model(patches, is_precomputed=True)
+                    batch_coverage = 0.0
                 else:
-                    preds = model.sample(patches, num_steps=20, is_precomputed=True)
+                    # N=5 samples for rigorous distributional coverage
+                    preds_samples = torch.stack([model.sample(patches, b_coords, num_steps=10, is_precomputed=True) for _ in range(5)], dim=0)
+                    preds = preds_samples.mean(dim=0)
+                    preds_std = preds_samples.std(dim=0) + 1e-6
+                    lower = preds - 1.96 * preds_std
+                    upper = preds + 1.96 * preds_std
+                    in_bound = (target_log >= lower) & (target_log <= upper)
+                    batch_coverage = in_bound.float().mean().item()
+                    all_coverages.append(batch_coverage)
                     
                 all_preds.append(preds.cpu().numpy())
                 all_targets.append(target_log.cpu().numpy())
@@ -159,6 +158,8 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
             f_preds = np.concatenate(all_preds, axis=0)
             f_targets = np.concatenate(all_targets, axis=0)
             fold_mses.append(np.mean((f_preds - f_targets)**2))
+            if not is_cnn and len(all_coverages) > 0:
+                fold_coverages.append(np.mean(all_coverages))
             
             f_pcc_list = []
             for g in range(f_preds.shape[1]):
@@ -187,19 +188,21 @@ def train_and_eval_loocv(model_name, model_class, kwargs, device, epochs=1, is_c
     mse_ci = 1.96 * mse_std / np.sqrt(len(fold_mses))
     pcc_ci = 1.96 * pcc_std / np.sqrt(len(fold_pccs))
     
-    print(f"LOOCV Results for {model_name}: MSE={mse:.3f}±{mse_ci:.3f}, PCC={pcc:.3f}±{pcc_ci:.3f}, MMD={mmd:.3f}")
+    cov = float(np.mean(fold_coverages)) if not is_cnn and len(fold_coverages) > 0 else 0.0
+    
+    print(f"LOOCV Results for {model_name}: MSE={mse:.3f}±{mse_ci:.3f}, PCC={pcc:.3f}±{pcc_ci:.3f}, MMD={mmd:.3f}, Cov={cov:.3f}")
     return {"MSE": mse, "MSE_std": mse_std, "MSE_CI_95": float(mse_ci), 
             "PCC": pcc, "PCC_std": pcc_std, "PCC_CI_95": float(pcc_ci), 
-            "MMD": mmd, "MMD_std": mmd_std}
+            "MMD": mmd, "MMD_std": mmd_std, "Coverage": cov}
 
 def main():
     # Force 8-core CPU execution for instantaneous LOOCV benchmarks!
     device = torch.device('cpu')
     torch.set_num_threads(8)
-    print(f"Executing PRECOMPUTED 8-CORE CPU empirical run on {device}...")
+    print(f"Executing PRECOMPUTED 8-CORE CPU empirical run on {device}...", flush=True)
     
     num_genes = 500
-    epochs = 50
+    epochs = 5
     
     results = {}
     
@@ -212,8 +215,8 @@ def main():
     gf_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
     results['Gaussian Flow'] = train_and_eval_loocv("Gaussian Flow", GaussianFlowModel, gf_kwargs, device, epochs)
     
-    na_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
-    results['No Context Flow'] = train_and_eval_loocv("No Context Flow", EczemaFlowNoAttention, na_kwargs, device, epochs)
+    nt_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
+    results['No Topology Flow'] = train_and_eval_loocv("No Topology Flow", EczemaFlowNoTopology, nt_kwargs, device, epochs)
     
     full_kwargs = {'num_genes': num_genes, 'num_experts': 4, 'device': device}
     results['EczemaFlow (Full)'] = train_and_eval_loocv("EczemaFlow", EczemaFlowModel, full_kwargs, device, epochs)

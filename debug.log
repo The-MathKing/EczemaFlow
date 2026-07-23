@@ -1,0 +1,15 @@
+/Volumes/2TB/EczemaFlow-1/run_deconvolution.py:13: UserWarning: Observation names are not unique. To make them unique, call `.obs_names_make_unique`.
+  spatial_adata = ad.read_h5ad(spatial_h5ad)
+/Volumes/2TB/EczemaFlow-1/run_deconvolution.py:16: UserWarning: Observation names are not unique. To make them unique, call `.obs_names_make_unique`.
+  scrna_adata = ad.read_h5ad(scrna_h5ad)
+Loading spatial data from data/GSE206391/GSE206391_Preprocessed_data.h5...
+Loading scRNA-seq reference from data/GSE206391/GSE206391_Preprocessed_data.h5...
+Loaded EczemaFlow model from models/eczemaflow_fold_1.pth.
+Performing cell type proportion mapping via proxy markers...
+Traceback (most recent call last):
+  File "/Volumes/2TB/EczemaFlow-1/run_deconvolution.py", line 76, in <module>
+  File "/Volumes/2TB/EczemaFlow-1/run_deconvolution.py", line 72, in main
+  File "/Volumes/2TB/EczemaFlow-1/run_deconvolution.py", line 33, in run_deconvolution
+    macro_expr = preds[:, macrophage_idx[0]] if len(macrophage_idx) > 0 else np.zeros(preds.shape[0])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+IndexError: index 13677 is out of bounds for axis 1 with size 500

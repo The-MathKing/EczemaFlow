@@ -1,0 +1,7 @@
+{
+  "external_cohort": "GSE197023",
+  "num_spots": 9585,
+  "num_hvgs_evaluated": 500,
+  "mean_gene_pcc": 0.02296522818505764,
+  "mean_mse": 2.1133975982666016
+}

@@ -34,7 +34,7 @@ class ViTContextualEncoder(nn.Module):
     Evaluates sets of morphological features simultaneously using self-attention
     to generate a high-order contextual embedding representing the multi-cell microenvironment.
     """
-    def __init__(self, embed_dim=256, num_heads=8, num_layers=3, dropout=0.1):
+    def __init__(self, embed_dim=256, num_heads=4, num_layers=1, dropout=0.1):
         super().__init__()
         self.embed_dim = embed_dim
         
@@ -73,23 +73,50 @@ class ViTContextualEncoder(nn.Module):
         contextual_embeds = out[:, 0, :] # (B, embed_dim)
         return contextual_embeds
 
+class SpatialFourierEncoder(nn.Module):
+    """
+    Maps 2D spatial coordinates (x, y) to a high-dimensional continuous feature space 
+    using Fourier Features to allow the flow-matching model to become spatially-aware.
+    """
+    def __init__(self, embed_dim=32, scale=1.0):
+        super().__init__()
+        # We project 2D coords to embed_dim // 2 dimensions
+        self.B = nn.Parameter(torch.randn(2, embed_dim // 2) * scale, requires_grad=False)
+        
+    def forward(self, coords):
+        """
+        coords: (batch_size, 2)
+        Returns: (batch_size, embed_dim)
+        """
+        # Normalize coordinates to roughly [0, 1] assuming max spatial size ~2000
+        coords_norm = coords / 2000.0
+        # (batch_size, 2) x (2, embed_dim // 2) -> (batch_size, embed_dim // 2)
+        x_proj = (2 * torch.pi * coords_norm) @ self.B
+        # Concat sin and cos
+        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        return out
+
 class ConditioningNetwork(nn.Module):
     """
-    Combines the Morphology Encoder, TDA Feature Extractor, and ViT Contextual Encoder.
+    Combines the Morphology Encoder, TDA Feature Extractor, Spatial Fourier Encoder,
+    and ViT Contextual Encoder.
     """
-    def __init__(self, embed_dim=256, tda_dim=64):
+    def __init__(self, embed_dim=256, tda_dim=256, spatial_dim=32):
         super().__init__()
         self.encoder = MorphologyEncoder(embed_dim=embed_dim)
         # We import TDA locally to avoid circular import if needed, or import at top
         from .tda import TDAFeatureExtractor
         self.tda = TDAFeatureExtractor(output_dim=tda_dim)
+        self.spatial_encoder = SpatialFourierEncoder(embed_dim=spatial_dim)
+        self.spatial_dim = spatial_dim
         
-        # The ViT now takes the concatenated embed_dim + tda_dim
-        self.attention = ViTContextualEncoder(embed_dim=embed_dim + tda_dim)
+        # The ViT now takes the concatenated embed_dim + tda_dim + spatial_dim
+        self.attention = ViTContextualEncoder(embed_dim=embed_dim + tda_dim + spatial_dim)
         
-    def forward(self, patches):
+    def forward(self, patches, coords):
         """
         patches: (batch_size, num_patches, channels, height, width)
+        coords: (batch_size, 2)
         """
         b, n, c, h, w = patches.shape
         # Flatten patches for CNN
@@ -103,16 +130,24 @@ class ConditioningNetwork(nn.Module):
         tda_features_flat = tda_features.view(b * n, -1)
         
         # Concatenate Morphology and TDA features
-        combined_features = torch.cat([patch_features, tda_features_flat], dim=-1)
+        combined_features = torch.cat([patch_features, tda_features_flat], dim=-1) # (b*n, embed_dim + tda_dim)
+        
+        # Extract Spatial Features
+        spatial_features = self.spatial_encoder(coords) # (b, spatial_dim)
+        # Expand spatial features to match each patch
+        spatial_features = spatial_features.unsqueeze(1).expand(b, n, -1) # (b, n, spatial_dim)
+        spatial_features_flat = spatial_features.reshape(b * n, -1)
+        
+        combined_features = torch.cat([combined_features, spatial_features_flat], dim=-1)
         
         # Apply ViT Contextual Encoder
         contextual_embeds = self.attention(combined_features, num_patches_per_spot=n)
         return contextual_embeds
 
-    def forward_precomputed(self, combined_features):
+    def forward_precomputed(self, combined_features, coords):
         """
         Bypasses the CNN and TDA extraction. Directly pipes the pre-computed 
-        dense embeddings (b, n, embed_dim + tda_dim) into the ViT.
+        dense embeddings (b, n, embed_dim + tda_dim) + newly computed spatial features into the ViT.
         """
         b, n, d = combined_features.shape
         
@@ -125,11 +160,19 @@ class ConditioningNetwork(nn.Module):
             
             # Project the 64-dim TDA features to the new tda_dim to maintain dimensionality
             if not hasattr(self, 'tda_adapter'):
-                self.tda_adapter = nn.Linear(tda_feats.shape[-1], target_d - 256).to(combined_features.device)
+                self.tda_adapter = nn.Linear(tda_feats.shape[-1], target_d - 256 - self.spatial_dim).to(combined_features.device)
             tda_feats = self.tda_adapter(tda_feats)
             combined_features = torch.cat([cnn_feats, tda_feats], dim=-1)
-            d = target_d
+            d = target_d - self.spatial_dim
             
+        # Add Spatial Features
+        spatial_features = self.spatial_encoder(coords) # (b, spatial_dim)
+        spatial_features = spatial_features.unsqueeze(1).expand(b, n, -1)
+        
+        # combine_features is (b, n, d)
+        combined_features = torch.cat([combined_features, spatial_features], dim=-1)
+        
+        d = combined_features.shape[-1]
         combined_features_flat = combined_features.view(b * n, d)
         contextual_embeds = self.attention(combined_features_flat, num_patches_per_spot=n)
         return contextual_embeds

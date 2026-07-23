@@ -1,0 +1,36 @@
+============================================================
+A1: Computing Cohort QC Statistics
+============================================================
+  fold_1: 2722 spots, 16685 genes, mean UMI=1299
+  fold_2: 2087 spots, 16685 genes, mean UMI=1758
+  fold_3: 2357 spots, 16685 genes, mean UMI=1789
+  fold_4: 1957 spots, 16685 genes, mean UMI=1166
+  fold_5: 3306 spots, 16685 genes, mean UMI=1479
+  test: 2852 spots, 16685 genes, mean UMI=1544
+
+Total spots across all folds: 15281
+QC report saved to results/cohort_qc.json
+
+============================================================
+A3: Generative Uncertainty Evaluation (N=10 samples)
+============================================================
+  Training model for generative eval (30 epochs)...
+    Epoch 10/30
+    Epoch 20/30
+    Epoch 30/30
+  Mean ensemble PCC: 0.1032
+  Mean predictive std: 0.8842
+  Uncertainty-Error correlation: 0.6689 (calibrated ✓)
+  Generative eval saved to results/generative_eval.json
+
+============================================================
+B2: Generating Gene Prediction Spatial Maps
+============================================================
+  Gene prediction maps saved to paper/figures/gene_prediction_maps.pdf
+
+============================================================
+All supplementary computations complete!
+  results/cohort_qc.json
+  results/generative_eval.json
+  paper/figures/gene_prediction_maps.pdf
+============================================================

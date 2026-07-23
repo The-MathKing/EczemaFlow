@@ -1,0 +1,13 @@
+============================================================
+ABLATION A: EczemaFlow with TDA=0 (simpler nuclei proxy)
+============================================================
+  No TDA [fold_1]: PCC=0.0227, MSE=1.0794
+  No TDA [fold_2]: PCC=0.0116, MSE=1.0391
+  No TDA [fold_3]: PCC=0.0539, MSE=1.0633
+  No TDA [fold_4]: PCC=0.0256, MSE=0.9988
+  No TDA [fold_5]: PCC=0.0572, MSE=1.0972
+  No TDA [test]: PCC=0.0407, MSE=1.1376
+
+[RESULT] No TDA: PCC=0.0353 ± 0.0167
+
+Results saved to results/ablation_tda.json
