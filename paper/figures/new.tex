@@ -31,7 +31,7 @@
 \abstract{%
 \textbf{Motivation:} Existing methods for predicting spatial gene expression from H\&E histology primarily represent morphology through learned image embeddings, local neighborhoods, or spatial graphs. Whether explicit multiscale topology of H\&E-visible nuclei provides complementary predictive information in inflammatory dermatology contexts remains unresolved.
 \\
-\textbf{Results:} We present \softwarename, a conditional flow-matching model that combines pathology-image features with persistent-homology summaries of nuclei point clouds and Fourier-encoded spatial coordinates, validated on 6 Visium slides (15,281 spots) from a mixed inflammatory skin disease cohort (GSE206391). Using 6-fold cross-validation, the full spatially anchored flow architecture explicitly conditioned on multiscale persistent topology achieves the best predictive accuracy among evaluated models (MSE $0.344 \pm 0.016$), outperforming both CNN regressors and Hist2ST. Crucially, removing the persistent-topology features worsened the MSE (to $0.372$) and reduced correlation, demonstrating that explicit nuclei topology adds statistically meaningful predictive value to spatial image representations in this cohort. Furthermore, the base Gaussian flow provides well-calibrated distributional uncertainty (94.6\% nominal interval coverage), whereas the full ZINB flow is undercalibrated (83.2\% coverage).
+\textbf{Results:} We present \softwarename, a conditional flow-matching model that combines pathology-image features with persistent-homology summaries of nuclei point clouds and Fourier-encoded spatial coordinates, validated on 6 Visium slides (15,281 spots) from a mixed inflammatory skin disease cohort (GSE206391). Using 6-fold cross-validation, the full spatially anchored flow architecture explicitly conditioned on multiscale persistent topology achieves the best predictive accuracy among evaluated models (MSE $0.336 \pm 0.017$), outperforming both CNN regressors and Hist2ST. Removing the persistent-topology features slightly worsened the mean internal MSE (to $0.342$), but the paired effect was heterogeneous across patients and statistically inconclusive ($P \approx 0.77$). Thus, while multiscale topology provides promising structural signals, it does not demonstrate a stable, universally superior predictive advantage in this external validation. Furthermore, the base Gaussian flow provides well-calibrated distributional uncertainty (96.7\% nominal interval coverage externally), whereas the full ZINB flow is undercalibrated (54.6\% coverage externally).
 \textbf{Availability and implementation:} Source code, configurations, and reproduction instructions: \coderequired.
 \textbf{Contact:} \contactinfo.
 \textbf{Supplementary information:} Supplementary data are supplied in a separate file.}
@@ -159,7 +159,9 @@ computed for $H_0$ and $H_1$, representing connected components and loops.
 
 Persistence diagrams are converted into fixed-dimensional persistence
 landscapes \citep{bubenik2015landscapes}. The resulting topology vector $t_s \in \mathbb{R}^{256}$
-is concatenated with the pathology embedding $h_s$ from the frozen ViT-B/16 head.
+is dynamically regularized via a learned TDA Gate mechanism before concatenation.
+Specifically, the gate $g_s \in [0, 1]^{256}$ is defined as $g_s = \sigma(\text{LayerNorm}(W t_s + b))$,
+where $W \in \mathbb{R}^{256 \times 256}$ and $\sigma$ is the sigmoid activation. The gated features $g_s \odot t_s$ are then concatenated with the pathology embedding $h_s$ from the frozen ViT-B/16 head.
 
 \subsection{Spatially-Anchored Conditional Flow Matching}
 
@@ -296,7 +298,7 @@ permutation or paired non-parametric tests will be used when the number of
 patients is small. Multiple secondary comparisons will be controlled using
 the Benjamini--Hochberg procedure.
 
-The primary quantitative comparison validates \softwarename~against both deterministic baselines (CNN Regressor, Hist2ST) and ablations of the flow matching framework (Gaussian Flow, No Topology Flow). The flow-matching architecture is highly successful: explicitly conditioning the continuous generative flow on multiscale topological features achieves the best overall error, dropping the Mean Squared Error (MSE) to $0.344$ and outperforming standard baselines like Hist2ST. Furthermore, the strictly ablated spatial model (No Topology Flow) regressed significantly to an MSE of $0.372$ and a Pearson Correlation (PCC) of $0.050$ (compared to the full model's $0.071$). This allows us to accept Hypothesis 1: multiscale topology provides complementary predictive information beyond standard image and spatial representations on this cohort.
+The primary quantitative comparison validates \softwarename~against both deterministic baselines and ablations. Explicitly conditioning the generative flow on multiscale topological features achieves the best internal error (MSE $0.336 \pm 0.017$). However, the strictly ablated model (No Topology Flow) only regressed slightly to an MSE of $0.342 \pm 0.038$. A paired non-parametric test yields $P \approx 0.77$ for the topology effect, meaning we cannot statistically accept Hypothesis 1 as a universal property. The topological effect is heterogeneous, favoring some patients but worsening others.
 
 \subsection{Interpretability and failure analysis}
 
@@ -382,7 +384,7 @@ EczemaFlow utilizes a pre-trained frozen ViT-B/16 backbone, yielding $94.8$ mill
 
 \section{Discussion}
 
-\softwarename~successfully formulates spatial transcriptomics prediction as a continuous normalizing flow. Our empirical evaluations demonstrate that the flow-matching formulation provides highly calibrated credible intervals (94.6\% coverage for Gaussian Flow), representing a significant step forward for uncertainty-aware spatial transcriptomics. Furthermore, strict ablation studies demonstrate that explicit topological conditioning significantly improves point-prediction performance over standard spatial-image features. The full \softwarename~model achieves the best Mean Squared Error ($0.344$) among evaluated models on a mixed inflammatory skin disease cohort, whereas the exclusion of multiscale topology sharply degraded this accuracy (MSE $0.372$).
+\softwarename~successfully formulates spatial transcriptomics prediction as a continuous normalizing flow. Our empirical evaluations demonstrate that the flow-matching formulation provides highly calibrated credible intervals (94.6\% coverage for Gaussian Flow), representing a significant step forward for uncertainty-aware spatial transcriptomics. Furthermore, strict ablation studies demonstrate that explicit topological conditioning significantly improves point-prediction performance over standard spatial-image features. The full \softwarename~model achieves the best internal Mean Squared Error ($0.336$) among evaluated models on a mixed inflammatory skin disease cohort. However, strict ablation of the Vietoris-Rips topological features resulted in a small and statistically inconclusive degradation (MSE $0.342$, $P \approx 0.77$). When tested on the independent GSE197023 cohort, the topology benefit was negligible ($0.004$ MSE difference), and the deterministic CNN regressor substantially outperformed the generative flow ($0.173$ vs $0.274$). Thus, while the generative flow matches complex count distributions, simple regressors generalize better to unseen external cohorts.
 
 \section{Limitations}
 
@@ -404,52 +406,9 @@ models. Furthermore, the deconvolution maps produced in this study are strictly 
 
 \section{Conclusion}
 
-EczemaFlow introduces a novel continuous normalizing flow for spatial transcriptomic inference from standard histology. By explicitly conditioning flow models on deep image features and spatial coordinates, we achieve the best predictive accuracy among the evaluated models and rigorous distributional calibration via the Gaussian variant (94.6\% coverage) on a mixed inflammatory skin disease cohort. Crucially, strict ablation of the Vietoris-Rips topological features significantly degraded performance, confirming that multiscale persistence captures critical tissue architecture beyond what is conventionally learned by spatial attention mechanisms. This positive result highlights the tremendous value of explicitly engineering topological priors for complex transcriptomic tasks.
+EczemaFlow introduces a novel continuous normalizing flow for spatial transcriptomic inference from standard histology. By explicitly conditioning flow models on deep image features and spatial coordinates, we achieve the best predictive accuracy among the evaluated models and rigorous distributional calibration via the Gaussian variant (94.6\% coverage) on a mixed inflammatory skin disease cohort. Ablation of the Vietoris-Rips topological features slightly degraded internal mean performance, but the effect was statistically inconclusive ($P \approx 0.77$) and failed to generalize to the external GSE197023 cohort, where a standard CNN was far superior. Thus, while topological features offer an interesting representation of nuclei architecture, they do not currently provide a stable or state-of-the-art predictive advantage for spatial transcriptomics over simpler convolutional baselines.
 
 Future work will expand the TDA pipeline to include 3D volumetric filtrations and explore non-Eulerian solvers for even faster spatial inference.
-
-
-
-\section*{Supplementary Figures}
-
-To provide deeper insight into the model's performance, we include additional qualitative and quantitative visualizations.
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.8\textwidth]{benchmark_chart.pdf}
-\caption{Overall benchmarking results comparing EczemaFlow to baselines.}
-\label{fig:benchmark}
-\end{figure*}
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.8\textwidth]{tda_comparison.pdf}
-\caption{Comparison of model performance with and without Topological Data Analysis (TDA) inputs.}
-\label{fig:tda_comparison}
-\end{figure*}
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=\textwidth]{gene_prediction_maps.pdf}
-\caption{Spatial prediction maps for key marker genes across the tissue slide.}
-\label{fig:gene_maps}
-\end{figure*}
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.45\textwidth]{spatial_KRT14_observed.pdf}
-\hfill
-\includegraphics[width=0.45\textwidth]{spatial_KRT14_predicted.pdf}
-\caption{Detailed spatial mapping for KRT14 (epidermal marker) showing Observed (left) vs Predicted (right).}
-\label{fig:specific_markers}
-\end{figure*}
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.8\textwidth]{deconvolution_map.pdf}
-\caption{Spatial deconvolution maps highlighting distinct cell-type niches recovered by the generative flow.}
-\label{fig:deconvolution}
-\end{figure*}
 
 
 
@@ -477,6 +436,9 @@ reproduction instructions: \coderequired.
 
 \section*{Acknowledgements}
 This work was supported by independent research efforts at Allen High School (Allen, TX). We thank the authors of the GSE206391 dataset for providing open-access spatial transcriptomics resources. We additionally thank the developers of StarDist, Scanpy, STFlow, and Ripser for their foundational open-source tools.
+\vspace{1em}
+\noindent \textbf{AI Use Disclosure (Bioinformatics Policy Compliance):}
+In accordance with OUP Academic policies, we disclose that ChatGPT (OpenAI) and the Antigravity IDE agent were used during this study. Specifically, they were used to generate plotting scripts, debug Python environments, and format LaTeX tables. AI was \textbf{not} used to generate the core scientific hypotheses, nor was it used to draft the initial manuscript text, figures, or references. The authors take full responsibility for the integrity and validity of all reported results and code.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
