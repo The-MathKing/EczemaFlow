@@ -28,7 +28,7 @@ with open("data/scales.json", "r") as f:
     scales = json.load(f)
 scale = scales[slide_id]
 
-patch_size = 224
+patch_size = 512
 print("Running StarDist to find high density spot...")
 model = StarDist2D.from_pretrained('2D_versatile_he')
 
@@ -39,7 +39,7 @@ best_labels = None
 best_details = None
 
 np.random.seed(42)
-indices_to_check = np.random.choice(len(adata), 30, replace=False)
+indices_to_check = np.random.choice(len(adata), 200, replace=False)
 
 for idx in indices_to_check:
     px, py = adata.obsm['spatial'][idx]
@@ -108,8 +108,8 @@ axs[1].axis('off')
 
 # 3. Point Cloud
 axs[2].scatter(points[:, 0], points[:, 1], s=20, c='#2ca02c', alpha=0.8, edgecolor='black', linewidth=0.5)
-axs[2].set_xlim(0, 224)
-axs[2].set_ylim(224, 0) # flip y axis to match image
+axs[2].set_xlim(0, 512)
+axs[2].set_ylim(512, 0) # flip y axis to match image
 axs[2].set_title("Nuclei Point Cloud", fontsize=14, fontweight='bold')
 axs[2].set_aspect('equal')
 axs[2].grid(True, linestyle='--', alpha=0.5)
