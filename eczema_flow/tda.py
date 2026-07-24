@@ -14,8 +14,9 @@ class TDAFeatureExtractor(nn.Module):
         super().__init__()
         self.output_dim = output_dim
         # We use PersistenceImager to convert persistence diagrams to fixed-size vectors
-        self.pimgr = PersistenceImager(pixel_size=0.1)
-        self.pimgr.fit([np.array([[0, 1]])]) # Dummy fit to initialize bounds
+        self.pimgr = PersistenceImager(pixel_size=10.0)
+        self.pimgr.birth_range = (0.0, 200.0)
+        self.pimgr.pers_range = (0.0, 200.0)
         
         # Linear layer to project the flattened persistence image into embedding space
         # Persim defaults to 20x20 images for Betti-1 (400 dims) + Betti-0 (400 dims) = 800

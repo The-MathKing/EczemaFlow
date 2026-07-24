@@ -130,11 +130,15 @@ class ConditioningNetwork(nn.Module):
         # Dynamic gating mechanism to suppress noisy TDA features
         self.tda_gate = TDAGate(tda_dim)
         
-    def forward(self, patches, coords):
+    def forward(self, patches, coords, shuffle_coords=False):
         """
         patches: (batch_size, num_patches, channels, height, width)
         coords: (batch_size, 2)
         """
+        if shuffle_coords:
+            idx = torch.randperm(coords.size(0))
+            coords = coords[idx]
+
         b, n, c, h, w = patches.shape
         # Flatten patches for CNN
         patches_flat = patches.view(b * n, c, h, w)
@@ -166,11 +170,15 @@ class ConditioningNetwork(nn.Module):
         contextual_embeds = self.attention(combined_features, num_patches_per_spot=n)
         return contextual_embeds
 
-    def forward_precomputed(self, combined_features, coords):
+    def forward_precomputed(self, combined_features, coords, shuffle_coords=False):
         """
         Bypasses the CNN and TDA extraction. Directly pipes the pre-computed 
         dense embeddings (b, n, embed_dim + tda_dim) + newly computed spatial features into the ViT.
         """
+        if shuffle_coords:
+            idx = torch.randperm(coords.size(0))
+            coords = coords[idx]
+
         b, n, d = combined_features.shape
         
         # Backward compatibility for precomputed features (which had tda_dim=64)

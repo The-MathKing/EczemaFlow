@@ -16,8 +16,10 @@ class Expert(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.SiLU(),
+            nn.Dropout(0.3),
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
+            nn.Dropout(0.3),
             nn.Linear(hidden_dim, x_dim)
         )
         

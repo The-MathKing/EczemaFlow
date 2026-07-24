@@ -28,6 +28,7 @@ class VisiumDataset(Dataset):
         self.num_genes = num_genes
         
         # Define heavy spatial and color augmentations for training
+        is_train = isinstance(fold, list) or 'train' in fold or fold.startswith('fold')
         self.transform = v2.Compose([
             v2.ToImage(),
             v2.RandomHorizontalFlip(p=0.5),
@@ -36,7 +37,7 @@ class VisiumDataset(Dataset):
             v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ]) if 'train' in fold or fold.startswith('fold') else v2.Compose([
+        ]) if is_train else v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -146,7 +147,10 @@ class VisiumDataset(Dataset):
         patches = patch_tensor.unsqueeze(0).expand(4, -1, -1, -1)
         coords = torch.tensor([px, py], dtype=torch.float32)
         
-        return patches, counts, coords
+        # Library size for ZINB size factor
+        library_size = counts.sum().unsqueeze(0)
+        
+        return patches, counts, coords, library_size
 
 class PrecomputedVisiumDataset(Dataset):
     """
@@ -169,4 +173,5 @@ class PrecomputedVisiumDataset(Dataset):
         return self.num_samples
 
     def __getitem__(self, idx):
-        return self.features[idx], self.counts[idx], self.coords[idx]
+        library_size = self.counts[idx].sum().unsqueeze(0)
+        return self.features[idx], self.counts[idx], self.coords[idx], library_size

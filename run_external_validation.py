@@ -10,21 +10,21 @@ from eczema_flow.model_baselines import CNNRegressor, Hist2STBaseline, GaussianP
 
 # Ablation 1: No Context (Simple Mean Pooling instead of ViT+TDA)
 class EczemaFlowNoTopology(EczemaFlowModel):
-    def compute_loss(self, patches, target_counts, coords=None, is_precomputed=True):
+    def compute_loss(self, patches, target_counts, coords=None, library_size=None, is_precomputed=True, shuffle_coords=True):
         if is_precomputed:
             patches_no_topo = patches.clone()
             patches_no_topo[:, :, 256:] = 0.0
-            return super().compute_loss(patches_no_topo, target_counts, coords, is_precomputed)
+            return super().compute_loss(patches_no_topo, target_counts, coords, library_size, is_precomputed, shuffle_coords)
         else:
-            return super().compute_loss(patches, target_counts, coords, is_precomputed)
+            return super().compute_loss(patches, target_counts, coords, library_size, is_precomputed, shuffle_coords)
             
-    def sample(self, patches, coords=None, num_steps=20, is_precomputed=True):
+    def sample(self, patches, coords=None, library_size=None, num_steps=20, is_precomputed=True, shuffle_coords=True):
         if is_precomputed:
             patches_no_topo = patches.clone()
             patches_no_topo[:, :, 256:] = 0.0
-            return super().sample(patches_no_topo, coords, num_steps, is_precomputed)
+            return super().sample(patches_no_topo, coords, library_size, num_steps, is_precomputed, shuffle_coords)
         else:
-            return super().sample(patches, coords, num_steps, is_precomputed)
+            return super().sample(patches, coords, library_size, num_steps, is_precomputed, shuffle_coords)
 
 # Ablation 2: Gaussian Flow Model
 class GaussianFlowModel(EczemaFlowModel):
@@ -48,7 +48,8 @@ class PrecomputedExternalDataset(Dataset):
         return len(self.features)
         
     def __getitem__(self, idx):
-        return self.features[idx], self.counts[idx], self.coords[idx], self.gsm_ids[idx]
+        library_size = self.counts[idx].sum().unsqueeze(0)
+        return self.features[idx], self.counts[idx], self.coords[idx], self.gsm_ids[idx], library_size
 
 def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=False):
     model = model_class(**kwargs).to(device)
@@ -58,10 +59,11 @@ def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=
     
     print(f"Evaluating {model_name} on external dataset GSE197023...")
     with torch.no_grad():
-        for b_feats, b_counts, b_coords, b_gsm in test_loader:
+        for b_feats, b_counts, b_coords, b_gsm, lib_size in test_loader:
             b_feats = b_feats.to(device)
             b_counts = b_counts[:, :500].to(device)
             b_coords = b_coords.to(device)
+            lib_size = lib_size.to(device)
             
             target_log = torch.log1p(b_counts)
             
@@ -72,7 +74,7 @@ def evaluate_model(model_name, model_class, kwargs, test_loader, device, is_cnn=
                 upper = preds
                 in_bound = torch.zeros_like(preds, dtype=torch.bool)
             else:
-                preds_samples = torch.stack([model.sample(b_feats, coords=b_coords, num_steps=20, is_precomputed=True) for _ in range(5)], dim=0)
+                preds_samples = torch.stack([model.sample(b_feats, coords=b_coords, library_size=lib_size, num_steps=20, is_precomputed=True) for _ in range(5)], dim=0)
                 preds = preds_samples.mean(dim=0)
                 preds_std = preds_samples.std(dim=0) + 1e-6
                 lower = preds - 1.96 * preds_std

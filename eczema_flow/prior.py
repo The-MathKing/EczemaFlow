@@ -86,7 +86,7 @@ class DynamicZINBPrior(nn.Module):
         """
         pass
 
-    def compute_zinb_loss(self, c, target_counts):
+    def compute_zinb_loss(self, c, target_counts, library_size=None):
         """
         Compute the ZINB negative log likelihood loss.
         """
@@ -97,6 +97,11 @@ class DynamicZINBPrior(nn.Module):
         
         # Safely compute parameters
         r = torch.exp(torch.clamp(log_r, -10, 5))
+        
+        if library_size is not None:
+            # Scale dispersion/mean parameter by library size (normalizes learning across capture spots)
+            r = r * (library_size / library_size.median()).clamp(min=0.1, max=10.0)
+
         
         import torch.nn.functional as F
         from torch.distributions import NegativeBinomial
@@ -119,7 +124,7 @@ class DynamicZINBPrior(nn.Module):
         log_prob = torch.where(pseudo_counts < 1e-6, zero_case, non_zero_case)
         return -torch.mean(log_prob)
 
-    def sample(self, c):
+    def sample(self, c, library_size=None):
         batch_size = c.size(0)
         params = self.proj(c)
         log_r = params[:, :self.num_genes]
@@ -128,6 +133,8 @@ class DynamicZINBPrior(nn.Module):
         
         with torch.no_grad():
             r = torch.exp(log_r)
+            if library_size is not None:
+                r = r * (library_size / library_size.median()).clamp(min=0.1, max=10.0)
             p = torch.sigmoid(logit_p)
             pi = torch.sigmoid(logit_pi)
             

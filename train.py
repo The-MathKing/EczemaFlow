@@ -75,12 +75,14 @@ def main():
         start_time = time.time()
         
         # Training
-        for batch_idx, (patches, counts, coords) in enumerate(train_loader):
+        for batch_idx, (patches, counts, coords, lib_size) in enumerate(train_loader):
             patches = patches.to(device)
             counts = counts.to(device)
+            coords = coords.to(device)
+            lib_size = lib_size.to(device)
             
             optimizer.zero_grad()
-            loss = model.compute_loss(patches, counts, is_precomputed=False)
+            loss = model.compute_loss(patches, counts, coords, library_size=lib_size, is_precomputed=False)
             loss.backward()
             optimizer.step()
             
@@ -96,14 +98,16 @@ def main():
             
             print(f"Epoch [{epoch+1}/{epochs}] - Running sparse ODE evaluation...")
             with torch.no_grad():
-                for batch_idx, (patches, counts, coords) in enumerate(val_loader):
+                for batch_idx, (patches, counts, coords, lib_size) in enumerate(val_loader):
                     # Subsample validation set (10%) to estimate loss rapidly
                     if batch_idx % 10 != 0:
                         continue
                         
                     patches = patches.to(device)
                     counts = counts.to(device)
-                    val_loss = model.compute_loss(patches, counts, is_precomputed=False)
+                    coords = coords.to(device)
+                    lib_size = lib_size.to(device)
+                    val_loss = model.compute_loss(patches, counts, coords, library_size=lib_size, is_precomputed=False)
                     total_val_loss += val_loss.item()
                     batches_evaluated += 1
                     

@@ -35,7 +35,7 @@ class EczemaFlowModel(nn.Module):
         """Wrapper for ODE solvers."""
         return self.vector_field(t, x, c)
 
-    def compute_loss(self, patches, target_counts, coords, is_precomputed=False):
+    def compute_loss(self, patches, target_counts, coords, library_size=None, is_precomputed=False, shuffle_coords=True):
         """
         Compute the Flow Matching objective.
         Optimal Transport Flow Matching (OT-FM) loss:
@@ -52,16 +52,19 @@ class EczemaFlowModel(nn.Module):
         
         # 1. Obtain morphology condition
         if is_precomputed:
-            c = self.conditioner.forward_precomputed(patches, coords)
+            c = self.conditioner.forward_precomputed(patches, coords, shuffle_coords=shuffle_coords)
         else:
-            c = self.conditioner(patches, coords)
+            c = self.conditioner(patches, coords, shuffle_coords=shuffle_coords)
         
         # 2. Sample target x_1 (empirical ST data)
         # We apply log1p as standard preprocessing for counts
         x_1 = torch.log1p(target_counts).to(self.device)
         
         # 3. Sample base noise x_0 from dynamically conditioned ZINB prior
-        x_0_raw = self.prior.sample(c).to(self.device)
+        if hasattr(self.prior, 'sample') and 'library_size' in self.prior.sample.__code__.co_varnames:
+            x_0_raw = self.prior.sample(c, library_size=library_size).to(self.device)
+        else:
+            x_0_raw = self.prior.sample(c).to(self.device)
         if isinstance(self.prior, (ZINBPrior, DynamicZINBPrior)):
             x_0 = torch.log1p(x_0_raw)
         else:
@@ -87,9 +90,11 @@ class EczemaFlowModel(nn.Module):
         loss_bal = self.vector_field.compute_load_balancing_loss(c)
         
         # 9. ZINB Prior Loss
-        # The dynamic ZINB prior must be trained end-to-end to maximize likelihood of empirical counts
         if hasattr(self.prior, 'compute_zinb_loss'):
-            loss_zinb = self.prior.compute_zinb_loss(c, target_counts)
+            if 'library_size' in self.prior.compute_zinb_loss.__code__.co_varnames:
+                loss_zinb = self.prior.compute_zinb_loss(c, target_counts, library_size=library_size)
+            else:
+                loss_zinb = self.prior.compute_zinb_loss(c, target_counts)
         else:
             loss_zinb = 0.0
             
@@ -97,7 +102,7 @@ class EczemaFlowModel(nn.Module):
         
         return loss
 
-    def sample(self, patches, coords, num_steps=50, is_precomputed=False):
+    def sample(self, patches, coords, library_size=None, num_steps=50, is_precomputed=False, shuffle_coords=True):
         """
         Sample from the model given morphology patches using an ODE solver.
         Requires `torchdiffeq`.
@@ -108,12 +113,15 @@ class EczemaFlowModel(nn.Module):
             raise ImportError("Please install torchdiffeq to sample: pip install torchdiffeq")
             
         if is_precomputed:
-            c = self.conditioner.forward_precomputed(patches, coords)
+            c = self.conditioner.forward_precomputed(patches, coords, shuffle_coords=shuffle_coords)
         else:
-            c = self.conditioner(patches, coords)
+            c = self.conditioner(patches, coords, shuffle_coords=shuffle_coords)
         
         # Sample x_0 from dynamically conditioned ZINB prior
-        x_0_raw = self.prior.sample(c).to(self.device)
+        if hasattr(self.prior, 'sample') and 'library_size' in self.prior.sample.__code__.co_varnames:
+            x_0_raw = self.prior.sample(c, library_size=library_size).to(self.device)
+        else:
+            x_0_raw = self.prior.sample(c).to(self.device)
         if isinstance(self.prior, (ZINBPrior, DynamicZINBPrior)):
             x_0 = torch.log1p(x_0_raw)
         else:
